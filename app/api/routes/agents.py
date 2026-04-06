@@ -1,0 +1,93 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.api.deps import verify_api_key, get_current_agent
+from app.db.session import get_db
+from app.schemas.agent import AgentCreate, AgentResponse, AgentRegistrationResponse, AgentStatusUpdate
+from app.schemas.agent_action import AgentActionCreate
+from app.services import agent_service
+from app.services.agent_action_service import create_action, get_actions_by_agent
+
+
+router = APIRouter()
+
+
+@router.post("/register", response_model=AgentRegistrationResponse)
+async def register_agent(
+    agent_create: AgentCreate,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(verify_api_key)
+):
+    """Register a new agent. Returns the agent including its auth token."""
+    agent = await agent_service.register_agent(db, agent_create)
+    # Log the registration action
+    await create_action(
+        db,
+        AgentActionCreate(
+            agent_id=agent.agent_id,
+            action_type="registered",
+            job_id=None,
+            details={"platform": agent.platform, "capabilities": agent.capabilities}
+        )
+    )
+    return agent
+
+
+@router.post("/heartbeat")
+async def heartbeat(
+    db: AsyncSession = Depends(get_db),
+    agent = Depends(get_current_agent)
+):
+    """Update agent heartbeat timestamp. Requires agent token."""
+    updated = await agent_service.update_heartbeat(db, agent.agent_id)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return {"status": "ok", "agent_id": agent.agent_id}
+
+
+@router.get("/", response_model=list[AgentResponse])
+async def list_agents(
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(verify_api_key)
+):
+    """List all registered agents. Admin only."""
+    agents = await agent_service.list_agents(db)
+    return agents
+
+
+@router.get("/{agent_id}", response_model=AgentResponse)
+async def get_agent(
+    agent_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(verify_api_key)
+):
+    """Get a specific agent by ID. Admin only."""
+    agent = await agent_service.get_agent(db, agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return agent
+
+
+@router.get("/{agent_id}/actions")
+async def get_agent_actions(
+    agent_id: str,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(verify_api_key)
+):
+    """Get audit log actions for an agent. Admin only."""
+    actions = await get_actions_by_agent(db, agent_id, limit)
+    return actions
+
+
+@router.post("/{agent_id}/status")
+async def update_agent_status(
+    agent_id: str,
+    update: AgentStatusUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(verify_api_key)
+):
+    """Update agent status (online, offline, busy, etc). Admin only."""
+    agent = await agent_service.update_agent_status(db, agent_id, update.status)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return {"status": "ok", "agent_id": agent.agent_id, "new_status": update.status}

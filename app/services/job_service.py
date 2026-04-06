@@ -1,0 +1,110 @@
+"""Job Service — Business logic for job lifecycle management.
+
+This module handles job creation, status updates, assignment, and querying.
+Jobs can be assigned to agents or routed to MCP services based on target_type.
+
+Extension Points:
+    - Add job scheduling (delayed execution)
+    - Add job retry logic with backoff
+    - Add job cancellation
+    - Add batch job operations
+"""
+
+from datetime import datetime, timezone
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.models.job import Job
+from app.schemas.job import JobCreate, JobStatusUpdate, NoteCreate
+
+
+async def create_job(db: AsyncSession, job_create: JobCreate) -> Job:
+    """Create a new job from the provided schema.
+    
+    The job starts with status "pending" and will be routed to an agent
+    or MCP service based on target_type and requirements.
+    """
+    job = Job(
+        type=job_create.type,
+        payload=job_create.payload,
+        requirements=job_create.requirements,
+        parent_job=job_create.parent_job,
+        depends_on=job_create.depends_on,
+        priority=job_create.priority,
+        notes=job_create.notes,
+        created_by=job_create.created_by,
+        target_type=job_create.target_type,
+        topic=job_create.topic
+    )
+    db.add(job)
+    await db.commit()
+    await db.refresh(job)
+    return job
+
+
+async def get_job(db: AsyncSession, job_id: str) -> Job | None:
+    result = await db.execute(select(Job).where(Job.job_id == job_id))
+    return result.scalar_one_or_none()
+
+
+async def update_status(db: AsyncSession, job_id: str, update: JobStatusUpdate) -> Job | None:
+    result = await db.execute(select(Job).where(Job.job_id == job_id))
+    job = result.scalar_one_or_none()
+    if job:
+        job.status = update.status
+        await db.commit()
+        await db.refresh(job)
+    return job
+
+
+async def assign_job(db: AsyncSession, job_id: str, agent_id: str) -> Job | None:
+    result = await db.execute(select(Job).where(Job.job_id == job_id))
+    job = result.scalar_one_or_none()
+    if job:
+        job.assigned_agent = agent_id
+        job.status = "assigned"
+        await db.commit()
+        await db.refresh(job)
+    return job
+
+
+async def get_pending_jobs(db: AsyncSession) -> list[Job]:
+    result = await db.execute(select(Job).where(Job.status == "pending"))
+    return list(result.scalars().all())
+
+
+async def list_jobs(db: AsyncSession, status: str | None = None, limit: int = 100) -> list[Job]:
+    """List jobs with optional status filter."""
+    query = select(Job)
+    if status:
+        query = query.where(Job.status == status)
+    query = query.order_by(Job.created_at.desc()).limit(limit)
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+async def add_child_job(db: AsyncSession, parent_id: str, child_id: str) -> Job | None:
+    """Add a child job reference to the parent job."""
+    result = await db.execute(select(Job).where(Job.job_id == parent_id))
+    job = result.scalar_one_or_none()
+    if job:
+        if child_id not in job.child_jobs:
+            job.child_jobs.append(child_id)
+            await db.commit()
+            await db.refresh(job)
+    return job
+
+
+async def add_note(db: AsyncSession, job_id: str, note: NoteCreate) -> Job | None:
+    """Add a note to a job."""
+    result = await db.execute(select(Job).where(Job.job_id == job_id))
+    job = result.scalar_one_or_none()
+    if job:
+        note_entry = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "author": note.author,
+            "content": note.content
+        }
+        job.notes.append(note_entry)
+        await db.commit()
+        await db.refresh(job)
+    return job
