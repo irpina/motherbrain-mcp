@@ -6,6 +6,7 @@ pydantic-settings
 redis[asyncio]
 python-dotenv
 httpx
+alembic
 
 # Testing dependencies
 pytest

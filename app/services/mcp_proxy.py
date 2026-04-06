@@ -5,7 +5,7 @@ including authentication, timeout handling, and error capture.
 
 Protocol Support:
     - REST: Plain HTTP POST to {endpoint}/execute
-    - MCP: JSON-RPC 2.0 to {endpoint}/mcp (Model Context Protocol)
+    - MCP: JSON-RPC 2.0 with session handshake to {endpoint}/mcp
 
 Note:
     This is a simple proxy for MVP. Future enhancements:
@@ -87,67 +87,78 @@ async def _call_rest_execute(service: MCPService, job: Job, timeout: float) -> d
 
 
 async def _call_mcp_native(service: MCPService, job: Job, timeout: float) -> dict:
-    """MCP JSON-RPC path: POST {endpoint}/mcp with tools/call
+    """MCP JSON-RPC path with full session handshake.
     
-    For services speaking the Model Context Protocol (JSON-RPC 2.0).
-    
-    job.type = tool name (e.g., "chat_send")
-    job.payload = tool arguments dict
+    Flow: initialize → notifications/initialized → tools/call
+    Session ID is returned in the 'mcp-session-id' response header.
     """
-    rpc_payload = {
-        "jsonrpc": "2.0",
-        "id": str(uuid4()),
-        "method": "tools/call",
-        "params": {
-            "name": job.type,
-            "arguments": job.payload
-        }
-    }
     headers = {
         "Content-Type": "application/json",
         "Accept": "application/json, text/event-stream"
     }
-    
+    mcp_url = f"{service.endpoint}/mcp"
+
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(
-                f"{service.endpoint}/mcp",
-                json=rpc_payload,
-                headers=headers
-            )
-            response.raise_for_status()
-            data = response.json()
-        
-        # MCP JSON-RPC error response
+
+            # Step 1: Initialize session
+            init_resp = await client.post(mcp_url, headers=headers, json={
+                "jsonrpc": "2.0",
+                "id": str(uuid4()),
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-03-26",
+                    "capabilities": {},
+                    "clientInfo": {"name": "motherbrain", "version": "1.0"}
+                }
+            })
+            init_resp.raise_for_status()
+            session_id = init_resp.headers.get("mcp-session-id")
+            if not session_id:
+                raise MCPServiceError(service.service_id, "MCP server did not return a session ID")
+
+            session_headers = {**headers, "mcp-session-id": session_id}
+
+            # Step 2: Send initialized notification (no response expected)
+            await client.post(mcp_url, headers=session_headers, json={
+                "jsonrpc": "2.0",
+                "method": "notifications/initialized"
+            })
+
+            # Step 3: Call the tool
+            call_resp = await client.post(mcp_url, headers=session_headers, json={
+                "jsonrpc": "2.0",
+                "id": str(uuid4()),
+                "method": "tools/call",
+                "params": {
+                    "name": job.type,
+                    "arguments": job.payload
+                }
+            })
+            call_resp.raise_for_status()
+            data = call_resp.json()
+
         if "error" in data:
             err = data["error"]
             raise MCPServiceError(
                 service.service_id,
                 f"MCP error {err.get('code', '?')}: {err.get('message', 'unknown')}"
             )
-        
-        # Unwrap MCP result — content is a list of blocks
+
         result = data.get("result", {})
         content = result.get("content", [])
-        # Flatten text blocks into a single result dict
         text_parts = [block["text"] for block in content if block.get("type") == "text"]
         return {
             "mcp_result": result,
             "text": "\n".join(text_parts) if text_parts else None
         }
-        
+
     except httpx.TimeoutException as e:
         raise MCPServiceTimeout(service.service_id) from e
     except httpx.HTTPStatusError as e:
-        raise MCPServiceError(
-            service.service_id,
-            f"HTTP {e.response.status_code}: {e.response.text}"
-        ) from e
+        raise MCPServiceError(service.service_id, f"HTTP {e.response.status_code}: {e.response.text}") from e
     except httpx.RequestError as e:
-        raise MCPServiceError(
-            service.service_id,
-            f"Request failed: {str(e)}"
-        ) from e
+        raise MCPServiceError(service.service_id, f"Request failed: {str(e)}") from e
 
 
 def hash_api_key(api_key: str) -> str:
