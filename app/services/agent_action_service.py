@@ -44,3 +44,12 @@ async def get_all_actions(db: AsyncSession, limit: int = 100) -> list[AgentActio
         .limit(limit)
     )
     return list(result.scalars().all())
+
+
+async def get_recent_actions(db: AsyncSession, limit: int = 20) -> list[AgentAction]:
+    """Get recent actions across all agents for system state summary.
+    
+    This is an alias for get_all_actions with a smaller default limit,
+    used by the system state service to provide recent activity context.
+    """
+    return await get_all_actions(db, limit=limit)

@@ -1,11 +1,12 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import verify_api_key, get_current_agent
 from app.db.session import get_db
 from app.schemas.job import JobCreate, JobResponse, JobStatusUpdate, LogEntry, NoteCreate
 from app.services import job_service
+from app.services import dispatcher
 from app.services.agent_action_service import create_action
 from app.queue import redis_queue
 
@@ -28,12 +29,13 @@ async def list_jobs(
 @router.post("/", response_model=JobResponse, status_code=status.HTTP_201_CREATED)
 async def create_job(
     job_create: JobCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     _: str = Depends(verify_api_key)
 ):
     """Create a new job and enqueue it. Admin only."""
     job = await job_service.create_job(db, job_create)
-    await redis_queue.enqueue_job(job.job_id)
+    background_tasks.add_task(dispatcher.dispatch, job.job_id)
     return job
 
 

@@ -193,6 +193,55 @@ async def delete_mcp_service(
     return {"status": "deleted", "service_id": service_id}
 
 
+@router.get("/tools")
+async def list_mcp_tools(
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(verify_api_key)
+):
+    """List tools from all registered MCP services.
+    
+    Returns aggregated tool information from all MCP services.
+    This reads from the database (capabilities field) — no live
+    MCP calls are made, so this is fast and won't fail if a
+    service is temporarily down.
+    
+    The LLM uses this to discover what tools are available before
+    deciding which job to create.
+    
+    Example response:
+    ```json
+    [
+      {
+        "service_id": "agentchattr-mcp",
+        "name": "Agent Chattr",
+        "status": "online",
+        "protocol": "mcp",
+        "tools": ["chat_send", "chat_read", "chat_join", "chat_who"]
+      }
+    ]
+    ```
+    
+    Args:
+        db: Database session
+    
+    Returns:
+        List of services with their available tools
+    """
+    services = await mcp_service_service.list_services(db)
+    
+    result = []
+    for svc in services:
+        result.append({
+            "service_id": svc.service_id,
+            "name": svc.name,
+            "status": svc.status,
+            "protocol": svc.protocol,
+            "tools": svc.capabilities or [],
+        })
+    
+    return result
+
+
 # FUTURE: Background task to mark stale services offline
 # This would be triggered by a scheduler (APScheduler or similar)
 async def cleanup_stale_services_task(db: AsyncSession):

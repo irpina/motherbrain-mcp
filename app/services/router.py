@@ -46,6 +46,14 @@ async def route_job(job: Job, db: AsyncSession) -> dict:
         return {"type": "agent", "target": agent}
     
     if job.target_type == "mcp":
+        # Direct targeting: caller specified exact service
+        if job.target_service_id:
+            service = await mcp_service_service.get_service(db, job.target_service_id)
+            if not service:
+                raise NoMCPServiceAvailable(job.job_id)
+            return {"type": "mcp", "target": service}
+        
+        # Capability-based matching (existing logic)
         services = await mcp_service_service.list_services(db)
         service = match_job_to_mcp(job, services)
         if not service:

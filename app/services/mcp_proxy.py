@@ -16,8 +16,10 @@ Note:
 """
 
 import hashlib
+import json
 import time
 from typing import Optional
+from urllib.parse import urlparse
 from uuid import uuid4
 
 import httpx
@@ -86,15 +88,43 @@ async def _call_rest_execute(service: MCPService, job: Job, timeout: float) -> d
         ) from e
 
 
+def _parse_mcp_response_body(response: httpx.Response) -> dict:
+    """Parse an MCP response that may be plain JSON or Server-Sent Events.
+
+    Some MCP servers (e.g. FastMCP with streamable-http transport) return
+    Content-Type: text/event-stream even for single-shot tool calls. The body
+    looks like:
+
+        event: message
+        data: {"jsonrpc": "2.0", "id": "...", "result": {...}}
+
+    This helper extracts the JSON payload regardless of encoding.
+    """
+    content_type = response.headers.get("content-type", "")
+    if "text/event-stream" in content_type:
+        for line in response.text.splitlines():
+            if line.startswith("data:"):
+                payload = line[len("data:"):].strip()
+                if payload:
+                    return json.loads(payload)
+        raise ValueError("SSE response contained no data line")
+    return response.json()
+
+
 async def _call_mcp_native(service: MCPService, job: Job, timeout: float) -> dict:
     """MCP JSON-RPC path with full session handshake.
-    
+
     Flow: initialize → notifications/initialized → tools/call
     Session ID is returned in the 'mcp-session-id' response header.
     """
+    parsed = urlparse(service.endpoint)
+    port_str = f":{parsed.port}" if parsed.port else ""
     headers = {
         "Content-Type": "application/json",
-        "Accept": "application/json, text/event-stream"
+        "Accept": "application/json, text/event-stream",
+        # Override Host to localhost so the MCP server's DNS-rebinding protection
+        # accepts requests originating from Docker (host.docker.internal).
+        "Host": f"localhost{port_str}",
     }
     mcp_url = f"{service.endpoint}/mcp"
 
@@ -136,7 +166,7 @@ async def _call_mcp_native(service: MCPService, job: Job, timeout: float) -> dic
                 }
             })
             call_resp.raise_for_status()
-            data = call_resp.json()
+            data = _parse_mcp_response_body(call_resp)
 
         if "error" in data:
             err = data["error"]

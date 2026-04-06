@@ -12,6 +12,7 @@ class JobCreate(BaseModel):
     notes: list[dict] = []
     created_by: str = "admin"
     target_type: str = "agent"  # "agent" | "mcp"
+    target_service_id: Optional[str] = None
     topic: Optional[str] = None
 
 
@@ -29,6 +30,7 @@ class JobResponse(BaseModel):
     notes: list
     created_by: str
     target_type: str
+    target_service_id: Optional[str]
     result: Optional[dict]
     error: Optional[str]
     topic: Optional[str]

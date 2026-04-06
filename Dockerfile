@@ -21,5 +21,7 @@ COPY alembic.ini .
 # Expose port
 EXPOSE 8000
 
-# Run migrations then start the application
-CMD alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000
+# Copy and use entrypoint script
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+CMD ["/docker-entrypoint.sh"]

@@ -42,6 +42,7 @@ class Job(Base):
     
     # MCP routing fields
     target_type: Mapped[str] = mapped_column(String, default="agent")  # "agent" | "mcp"
+    target_service_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     result: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     error: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     topic: Mapped[Optional[str]] = mapped_column(String, nullable=True)

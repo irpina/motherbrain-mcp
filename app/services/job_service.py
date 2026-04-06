@@ -33,6 +33,7 @@ async def create_job(db: AsyncSession, job_create: JobCreate) -> Job:
         notes=job_create.notes,
         created_by=job_create.created_by,
         target_type=job_create.target_type,
+        target_service_id=job_create.target_service_id,
         topic=job_create.topic
     )
     db.add(job)

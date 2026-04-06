@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.db.init_db import init_db
-from app.api.routes import agents, jobs, context, messages, actions, mcp
+from app.api.routes import agents, jobs, context, messages, actions, mcp, system, events
 from app.background.heartbeat import start_heartbeat_checker
 
 
@@ -39,6 +39,8 @@ app.include_router(context.router, prefix="/context", tags=["context"])
 app.include_router(messages.router, prefix="/messages", tags=["messages"])
 app.include_router(actions.router, prefix="/actions", tags=["actions"])
 app.include_router(mcp.router, tags=["mcp"])
+app.include_router(system.router)
+app.include_router(events.router)
 
 
 @app.get("/health")
