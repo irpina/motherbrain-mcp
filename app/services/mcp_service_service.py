@@ -40,7 +40,8 @@ async def register_service(
         capabilities=data.capabilities,
         status="offline",    # Becomes "online" after the first heartbeat
         last_heartbeat=None,
-        api_key_hash=api_key_hash
+        api_key_hash=api_key_hash,
+        protocol=data.protocol
     )
     
     db.add(service)
@@ -152,6 +153,8 @@ async def update_service(
         service.endpoint = data.endpoint
     if data.capabilities is not None:
         service.capabilities = data.capabilities
+    if data.protocol is not None:
+        service.protocol = data.protocol
     
     await db.commit()
     await db.refresh(service)

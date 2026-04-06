@@ -16,6 +16,7 @@ export function RegisterMCPDialog({ isOpen, onClose }: RegisterMCPDialogProps) {
   const [endpoint, setEndpoint] = useState("");
   const [capabilities, setCapabilities] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [protocol, setProtocol] = useState("rest");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -25,6 +26,7 @@ export function RegisterMCPDialog({ isOpen, onClose }: RegisterMCPDialogProps) {
     setEndpoint("");
     setCapabilities("");
     setApiKey("");
+    setProtocol("rest");
     setError(null);
   };
 
@@ -50,6 +52,7 @@ export function RegisterMCPDialog({ isOpen, onClose }: RegisterMCPDialogProps) {
         endpoint: endpoint.trim(),
         capabilities: capsArray,
         api_key: apiKey.trim() || undefined,
+        protocol: protocol,
       });
 
       queryClient.invalidateQueries({ queryKey: ["mcp-services"] });
@@ -119,6 +122,17 @@ export function RegisterMCPDialog({ isOpen, onClose }: RegisterMCPDialogProps) {
               placeholder="e.g., generate_code, python"
               className="w-full px-3 py-2 border rounded-md text-sm"
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Protocol</label>
+            <select
+              value={protocol}
+              onChange={(e) => setProtocol(e.target.value)}
+              className="w-full px-3 py-2 border rounded-md text-sm"
+            >
+              <option value="rest">REST (POST /execute)</option>
+              <option value="mcp">MCP (JSON-RPC /mcp)</option>
+            </select>
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">

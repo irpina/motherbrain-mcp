@@ -3,6 +3,10 @@
 This module handles HTTP communication with registered MCP services,
 including authentication, timeout handling, and error capture.
 
+Protocol Support:
+    - REST: Plain HTTP POST to {endpoint}/execute
+    - MCP: JSON-RPC 2.0 to {endpoint}/mcp (Model Context Protocol)
+
 Note:
     This is a simple proxy for MVP. Future enhancements:
     - Retry logic with exponential backoff
@@ -14,6 +18,7 @@ Note:
 import hashlib
 import time
 from typing import Optional
+from uuid import uuid4
 
 import httpx
 
@@ -29,8 +34,7 @@ async def call_mcp_service(
 ) -> dict:
     """Execute a job by calling an MCP service.
     
-    This function acts as a proxy between Motherbrain and an MCP service,
-    forwarding the job payload and returning the result.
+    Routes to REST or MCP-native execution based on service.protocol.
     
     Args:
         service: The MCP service to call
@@ -43,34 +47,95 @@ async def call_mcp_service(
     Raises:
         MCPServiceTimeout: If the request times out
         MCPServiceError: If the service returns an error status
-    
-    Example:
-        >>> service = await get_mcp_service(db, "mcp-001")
-        >>> job = await get_job(db, "job-123")
-        >>> result = await call_mcp_service(service, job)
-        >>> print(result["code"])
     """
-    # Prepare headers with API key if available
+    if service.protocol == "mcp":
+        return await _call_mcp_native(service, job, timeout)
+    return await _call_rest_execute(service, job, timeout)
+
+
+async def _call_rest_execute(service: MCPService, job: Job, timeout: float) -> dict:
+    """Original REST path: POST {endpoint}/execute
+    
+    For services using the simple REST execution protocol.
+    """
     headers = {"Content-Type": "application/json"}
     if service.api_key_hash:
-        # TODO: In production, retrieve the actual API key from secrets manager
-        # For MVP, we pass a placeholder - the actual key exchange needs
-        # to be implemented based on your security requirements
         headers["X-API-Key"] = service.api_key_hash
     
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(
                 f"{service.endpoint}/execute",
-                json={
-                    "job_id": job.job_id,
-                    "payload": job.payload
-                },
+                json={"job_id": job.job_id, "payload": job.payload},
                 headers=headers
             )
             response.raise_for_status()
             return response.json()
             
+    except httpx.TimeoutException as e:
+        raise MCPServiceTimeout(service.service_id) from e
+    except httpx.HTTPStatusError as e:
+        raise MCPServiceError(
+            service.service_id,
+            f"HTTP {e.response.status_code}: {e.response.text}"
+        ) from e
+    except httpx.RequestError as e:
+        raise MCPServiceError(
+            service.service_id,
+            f"Request failed: {str(e)}"
+        ) from e
+
+
+async def _call_mcp_native(service: MCPService, job: Job, timeout: float) -> dict:
+    """MCP JSON-RPC path: POST {endpoint}/mcp with tools/call
+    
+    For services speaking the Model Context Protocol (JSON-RPC 2.0).
+    
+    job.type = tool name (e.g., "chat_send")
+    job.payload = tool arguments dict
+    """
+    rpc_payload = {
+        "jsonrpc": "2.0",
+        "id": str(uuid4()),
+        "method": "tools/call",
+        "params": {
+            "name": job.type,
+            "arguments": job.payload
+        }
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream"
+    }
+    
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(
+                f"{service.endpoint}/mcp",
+                json=rpc_payload,
+                headers=headers
+            )
+            response.raise_for_status()
+            data = response.json()
+        
+        # MCP JSON-RPC error response
+        if "error" in data:
+            err = data["error"]
+            raise MCPServiceError(
+                service.service_id,
+                f"MCP error {err.get('code', '?')}: {err.get('message', 'unknown')}"
+            )
+        
+        # Unwrap MCP result — content is a list of blocks
+        result = data.get("result", {})
+        content = result.get("content", [])
+        # Flatten text blocks into a single result dict
+        text_parts = [block["text"] for block in content if block.get("type") == "text"]
+        return {
+            "mcp_result": result,
+            "text": "\n".join(text_parts) if text_parts else None
+        }
+        
     except httpx.TimeoutException as e:
         raise MCPServiceTimeout(service.service_id) from e
     except httpx.HTTPStatusError as e:
@@ -107,8 +172,7 @@ def generate_api_key() -> str:
     Returns:
         A new UUID-based API key
     """
-    import uuid
-    return f"mcp_{uuid.uuid4().hex}"
+    return f"mcp_{uuid4().hex}"
 
 
 # FUTURE: Implement retry logic

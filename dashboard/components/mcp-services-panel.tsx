@@ -54,6 +54,7 @@ export function MCPServicesPanel() {
               <th className="px-4 py-2 text-left font-medium">Name</th>
               <th className="px-4 py-2 text-left font-medium">Endpoint</th>
               <th className="px-4 py-2 text-left font-medium">Capabilities</th>
+              <th className="px-4 py-2 text-left font-medium">Protocol</th>
               <th className="px-4 py-2 text-left font-medium">Last Heartbeat</th>
               <th className="px-4 py-2 text-left font-medium"></th>
             </tr>
@@ -76,6 +77,11 @@ export function MCPServicesPanel() {
                       <span key={cap} className="px-2 py-0.5 bg-slate-100 rounded text-xs">{cap}</span>
                     ))}
                   </div>
+                </td>
+                <td className="px-4 py-3">
+                  <span className={`px-2 py-0.5 rounded text-xs ${service.protocol === 'mcp' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>
+                    {service.protocol || 'rest'}
+                  </span>
                 </td>
                 <td className="px-4 py-3 text-slate-500">
                   {service.last_heartbeat ? formatRelativeTime(service.last_heartbeat) : "Never"}

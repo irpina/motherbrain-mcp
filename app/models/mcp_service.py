@@ -19,3 +19,4 @@ class MCPService(Base):
         nullable=True
     )
     api_key_hash: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    protocol: Mapped[str] = mapped_column(String, default="rest")  # "rest" | "mcp"
