@@ -57,3 +57,6 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+# External services (not part of core release)
+agentchattr/
