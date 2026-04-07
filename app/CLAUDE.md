@@ -8,7 +8,9 @@ This is the core FastAPI application. Everything here is runtime code.
 ```
 app/
 ├── main.py          # App entry point, lifespan events, CORS
+├── mcp_server.py    # FastMCP server mounted at /mcp
 ├── api/             # HTTP routes (IMPORT-ONLY, no logic)
+├── background/      # heartbeat.py + health_check.py background tasks
 ├── core/            # Config, security constants
 ├── db/              # Database connection management
 ├── models/          # SQLAlchemy ORM models
