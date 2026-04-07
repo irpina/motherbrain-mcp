@@ -18,8 +18,8 @@ COPY app/ ./app/
 COPY alembic/ ./alembic/
 COPY alembic.ini .
 
-# Expose port
-EXPOSE 8000
+# Expose ports
+EXPOSE 8000 8300
 
 # Copy and use entrypoint script
 COPY docker-entrypoint.sh /docker-entrypoint.sh

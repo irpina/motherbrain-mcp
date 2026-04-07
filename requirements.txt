@@ -7,6 +7,7 @@ redis[asyncio]
 python-dotenv
 httpx
 alembic
+mcp
 
 # Testing dependencies
 pytest

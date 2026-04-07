@@ -3,6 +3,7 @@ services:
     build: .
     ports:
       - "8000:8000"
+      - "8300:8300"
     env_file:
       - .env
     depends_on:

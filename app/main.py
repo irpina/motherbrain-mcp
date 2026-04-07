@@ -1,4 +1,5 @@
 import asyncio
+import threading
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +13,16 @@ async def lifespan(app: FastAPI):
     # Startup: initialize DB and background tasks
     await init_db()
     heartbeat_task = asyncio.create_task(start_heartbeat_checker())
+    
+    # Start MCP server in background thread (like agentchattr)
+    from app.mcp_server import mcp
+    mcp_thread = threading.Thread(
+        target=mcp.run,
+        kwargs={"transport": "streamable-http"},
+        daemon=True,
+    )
+    mcp_thread.start()
+    
     yield
     # Shutdown: cancel background tasks cleanly
     heartbeat_task.cancel()
