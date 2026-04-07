@@ -5,6 +5,10 @@
 ## Project Overview
 
 Motherbrain MCP is a FastAPI-based control plane that:
+- Exposes a unified MCP endpoint for LLM clients
+- Proxies tool calls to registered MCP services
+- Logs all activity to a persistent event log
+- Auto-monitors service health every 30s
 - Registers and manages AI agents
 - Routes jobs to agents or MCP services
 - Tracks execution via audit logs
@@ -15,18 +19,21 @@ Motherbrain MCP is a FastAPI-based control plane that:
 
 ```
 motherbrain-mcp/
-├── app/              # FastAPI application
-│   ├── api/          # HTTP routes (thin layer, no business logic)
-│   ├── core/         # Configuration and security
-│   ├── db/           # Database models and sessions
-│   ├── models/       # SQLAlchemy ORM models
-│   ├── schemas/      # Pydantic request/response models
-│   ├── services/     # Business logic and orchestration
-│   └── queue/        # Redis queue operations
-├── agent/            # Example agent implementation
-├── dashboard/        # Next.js frontend
-├── alembic/          # Database migrations
-└── mock_mcp_server/  # Test MCP server (see below)
+├── app/                     # FastAPI application
+│   ├── mcp_server.py        # FastMCP server — 7 MCP tools
+│   ├── api/                 # HTTP routes (thin layer, no business logic)
+│   ├── background/          # Heartbeat + health-check background tasks
+│   ├── core/                # Configuration and security
+│   ├── db/                  # Database models and sessions
+│   ├── models/              # SQLAlchemy ORM models
+│   │   └── event_log.py     # Unified activity log model
+│   ├── schemas/             # Pydantic request/response models
+│   ├── services/            # Business logic and orchestration
+│   └── queue/               # Redis queue operations
+├── agent/                   # Example agent implementation
+├── dashboard/               # Next.js frontend
+├── alembic/                 # Database migrations
+└── mock_mcp_server/         # Test MCP server (see below)
 ```
 
 ## Key Principles
