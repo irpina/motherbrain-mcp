@@ -38,8 +38,8 @@ async def register_service(
         name=data.name,
         endpoint=data.endpoint,
         capabilities=data.capabilities,
-        status="offline",    # Becomes "online" after the first heartbeat
-        last_heartbeat=None,
+        status="online",  # Service is alive at registration time
+        last_heartbeat=datetime.now(timezone.utc),
         api_key_hash=api_key_hash,
         protocol=data.protocol
     )

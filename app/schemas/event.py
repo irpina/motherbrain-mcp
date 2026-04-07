@@ -12,7 +12,7 @@ class EventCreate(BaseModel):
     """Schema for ingesting events from MCP servers.
     
     This is the contract any MCP server uses to notify Motherbrain
-    that something happened. The event becomes a pending job that	he LLM can discover and act upon.
+    that something happened. The event becomes a pending job that	the LLM can discover and act upon.
     
     Example:
         {
@@ -23,7 +23,8 @@ class EventCreate(BaseModel):
                 "sender": "user",
                 "text": "@claude do something"
             },
-            "topic": "general"
+            "topic": "general",
+            "addressed_to": ["claude"]
         }
     """
     service_id: str
@@ -41,3 +42,7 @@ class EventCreate(BaseModel):
     
     topic: Optional[str] = None
     """Optional topic/channel for filtering. Becomes job.topic."""
+    
+    addressed_to: list[str] = []
+    """List of agent names mentioned/@targeted in this event.
+    Used to route the job to a specific agent. First mention becomes assigned_agent."""

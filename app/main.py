@@ -1,11 +1,21 @@
 import asyncio
-import threading
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.db.init_db import init_db
-from app.api.routes import agents, jobs, context, messages, actions, mcp, system, events
+from app.api.routes import agents, jobs, context, messages, actions, mcp, system, events, heartbeat, event_log_routes
 from app.background.heartbeat import start_heartbeat_checker
+from app.mcp_server import mcp as mcp_server
+
+# Cache the MCP app and access session manager
+_mcp_app = None
+
+def get_mcp_app():
+    """Get or create the MCP Starlette app (cached)."""
+    global _mcp_app
+    if _mcp_app is None:
+        _mcp_app = mcp_server.streamable_http_app()
+    return _mcp_app
 
 
 @asynccontextmanager
@@ -14,16 +24,12 @@ async def lifespan(app: FastAPI):
     await init_db()
     heartbeat_task = asyncio.create_task(start_heartbeat_checker())
     
-    # Start MCP server in background thread (like agentchattr)
-    from app.mcp_server import mcp
-    mcp_thread = threading.Thread(
-        target=mcp.run,
-        kwargs={"transport": "streamable-http"},
-        daemon=True,
-    )
-    mcp_thread.start()
+    # Start MCP session manager (required for streamable-http transport)
+    # This initializes the task group that handles concurrent sessions
+    get_mcp_app()  # Ensure app is created
+    async with mcp_server.session_manager.run():
+        yield
     
-    yield
     # Shutdown: cancel background tasks cleanly
     heartbeat_task.cancel()
 
@@ -52,6 +58,11 @@ app.include_router(actions.router, prefix="/actions", tags=["actions"])
 app.include_router(mcp.router, tags=["mcp"])
 app.include_router(system.router)
 app.include_router(events.router)
+app.include_router(heartbeat.router)
+app.include_router(event_log_routes.router)
+
+# Mount MCP server at /mcp (shares FastAPI event loop)
+app.mount("/mcp", get_mcp_app())
 
 
 @app.get("/health")

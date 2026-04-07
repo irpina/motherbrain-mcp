@@ -34,7 +34,8 @@ async def create_job(db: AsyncSession, job_create: JobCreate) -> Job:
         created_by=job_create.created_by,
         target_type=job_create.target_type,
         target_service_id=job_create.target_service_id,
-        topic=job_create.topic
+        topic=job_create.topic,
+        assigned_agent=job_create.assigned_agent
     )
     db.add(job)
     await db.commit()
@@ -109,3 +110,22 @@ async def add_note(db: AsyncSession, job_id: str, note: NoteCreate) -> Job | Non
         await db.commit()
         await db.refresh(job)
     return job
+
+
+async def get_jobs_for_agent(db: AsyncSession, agent_id: str, status: str | None = None) -> list[Job]:
+    """Get jobs assigned to a specific agent.
+    
+    Args:
+        db: Database session
+        agent_id: The agent's ID (e.g., "sampson", "motherbrain-agent")
+        status: Optional status filter (pending, assigned, running, etc.)
+    
+    Returns:
+        List of jobs assigned to this agent, ordered by creation time (newest first)
+    """
+    query = select(Job).where(Job.assigned_agent == agent_id)
+    if status:
+        query = query.where(Job.status == status)
+    query = query.order_by(Job.created_at.desc()).limit(50)
+    result = await db.execute(query)
+    return list(result.scalars().all())

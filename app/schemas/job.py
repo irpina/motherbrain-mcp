@@ -14,6 +14,7 @@ class JobCreate(BaseModel):
     target_type: str = "agent"  # "agent" | "mcp"
     target_service_id: Optional[str] = None
     topic: Optional[str] = None
+    assigned_agent: Optional[str] = None  # Pre-assign to specific agent (e.g., from @mention)
 
 
 class JobResponse(BaseModel):

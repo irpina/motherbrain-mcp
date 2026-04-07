@@ -4,7 +4,8 @@ from app.api.deps import verify_api_key, get_current_agent
 from app.db.session import get_db
 from app.schemas.agent import AgentCreate, AgentResponse, AgentRegistrationResponse, AgentStatusUpdate
 from app.schemas.agent_action import AgentActionCreate
-from app.services import agent_service
+from app.schemas.job import JobResponse
+from app.services import agent_service, job_service
 from app.services.agent_action_service import create_action, get_actions_by_agent
 
 
@@ -52,6 +53,28 @@ async def list_agents(
     """List all registered agents. Admin only."""
     agents = await agent_service.list_agents(db)
     return agents
+
+
+@router.get("/{agent_id}/jobs", response_model=list[JobResponse])
+async def get_agent_jobs(
+    agent_id: str,
+    status: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(verify_api_key)
+):
+    """Get jobs assigned to a specific agent.
+    
+    Agents poll this endpoint to discover work addressed to them
+    (e.g., via @mention in chat). Returns jobs newest first.
+    
+    Args:
+        agent_id: The agent's unique ID (e.g., "sampson")
+        status: Optional filter (pending, assigned, running, completed)
+    
+    Returns:
+        List of jobs assigned to this agent
+    """
+    return await job_service.get_jobs_for_agent(db, agent_id, status)
 
 
 @router.get("/{agent_id}", response_model=AgentResponse)

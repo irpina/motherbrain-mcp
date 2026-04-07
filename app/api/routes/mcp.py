@@ -242,6 +242,37 @@ async def list_mcp_tools(
     return result
 
 
+@router.post("/heartbeat/{service_id}", response_model=MCPServiceResponse)
+async def mcp_heartbeat_by_path(
+    service_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(verify_api_key)
+):
+    """Update MCP service heartbeat (URL path version).
+    
+    Simpler alternative to POST /mcp/heartbeat — just the service_id in the URL.
+    Services should call this periodically (e.g., every 30 seconds)
+    to indicate they are still alive.
+    
+    Args:
+        service_id: The service identifier (from URL path)
+        db: Database session
+    
+    Returns:
+        The updated service
+    
+    Raises:
+        HTTPException 404: If service not found
+    """
+    service = await mcp_service_service.update_heartbeat(db, service_id)
+    if not service:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Service {service_id} not found"
+        )
+    return service
+
+
 # FUTURE: Background task to mark stale services offline
 # This would be triggered by a scheduler (APScheduler or similar)
 async def cleanup_stale_services_task(db: AsyncSession):

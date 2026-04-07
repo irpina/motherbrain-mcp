@@ -15,6 +15,7 @@ from app.schemas.event import EventCreate
 from app.schemas.job import JobCreate, JobResponse
 from app.services import job_service
 from app.services import mcp_service_service
+from app.services.agent_registry import enqueue_trigger
 
 
 router = APIRouter(tags=["events"])
@@ -83,6 +84,7 @@ async def ingest_event(
     
     # Create a job from the event
     # Events become jobs with target_type="agent" — the LLM will handle them
+    # If addressed_to is provided, assign to the first mentioned agent
     job_create = JobCreate(
         type=event.event_type,
         payload=event.payload,
@@ -90,9 +92,24 @@ async def ingest_event(
         target_type="agent",  # Needs LLM intervention
         topic=event.topic,
         created_by=event.service_id,  # Track which service created this
+        assigned_agent=event.addressed_to[0] if event.addressed_to else None,
     )
     
     job = await job_service.create_job(db, job_create)
+    
+    # Enqueue trigger for heartbeat delivery if agent is addressed
+    # This enables push-like delivery via the heartbeat endpoint
+    if event.addressed_to:
+        target_agent = event.addressed_to[0]
+        # Queue trigger regardless of agent online status
+        # Agent will receive it on next heartbeat (queue holds until ready)
+        enqueue_trigger(target_agent, {
+            "job_id": job.job_id,
+            "channel": event.topic,
+            "sender": event.payload.get("sender", "unknown"),
+            "text": event.payload.get("text", ""),
+            "addressed_to": target_agent,
+        })
     
     # Note: We don't dispatch via background task here.
     # Events from MCP services create jobs that sit as "pending"
