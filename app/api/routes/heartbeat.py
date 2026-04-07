@@ -8,21 +8,27 @@ This enables push-like delivery without websockets — agents heartbeat
 every few seconds and receive queued triggers in the response.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Query
 from datetime import datetime, timezone
 from typing import Any
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.session import get_db
 from app.services.agent_registry import (
     register_heartbeat,
     get_pending_triggers,
 )
-from app.services.event_log import append_event
+from app.services.agent_service import update_heartbeat as update_agent_heartbeat
 
 router = APIRouter(tags=["heartbeat"])
 
 
 @router.post("/api/heartbeat/{agent_name}")
-async def heartbeat(agent_name: str) -> dict[str, Any]:
+async def heartbeat(
+    agent_name: str,
+    agent_id: str = Query(""),
+    db: AsyncSession = Depends(get_db)
+) -> dict[str, Any]:
     """Agent checks in. Returns any pending triggers.
     
     This is the heartbeat endpoint agents call periodically to:
@@ -31,6 +37,7 @@ async def heartbeat(agent_name: str) -> dict[str, Any]:
     
     Args:
         agent_name: The unique name of the agent (e.g., "tester", "claude")
+        agent_id: Optional DB agent ID to update last_heartbeat in database
         
     Returns:
         {
@@ -52,27 +59,19 @@ async def heartbeat(agent_name: str) -> dict[str, Any]:
         POST /api/heartbeat/tester
         → {"status": "ok", "triggers": [], ...}
         
-        # After user sends @tester hello:
-        POST /api/heartbeat/tester
-        → {"status": "ok", "triggers": [{"job_id": "...", "text": "@tester hello", ...}]}
+        POST /api/heartbeat/tester?agent_id=abc-123
+        → Updates DB last_heartbeat as well as in-memory registry
     """
-    # Record this heartbeat
+    # Record this heartbeat in in-memory registry
     register_heartbeat(agent_name)
+    
+    # Also update DB last_heartbeat if agent_id provided
+    if agent_id:
+        await update_agent_heartbeat(db, agent_id)
     
     # Get any pending triggers for this agent
     triggers = get_pending_triggers(agent_name)
-    
-    # Log the heartbeat event
-    append_event(
-        topic="heartbeat",
-        service_id="motherbrain",
-        tool_name="heartbeat",
-        arguments={"agent_name": agent_name},
-        response={"triggers_delivered": len(triggers)},
-        status="ok",
-        duration_ms=0
-    )
-    
+
     return {
         "status": "ok",
         "timestamp": datetime.now(timezone.utc).isoformat(),

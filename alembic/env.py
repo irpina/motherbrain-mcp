@@ -16,7 +16,7 @@ from alembic import context
 # Import our app config and models
 from app.core.config import settings
 from app.db.base import Base
-from app.models import Agent, Job, AgentAction, ProjectContext, AgentMessage, MCPService
+from app.models import Agent, Job, AgentAction, ProjectContext, AgentMessage, MCPService, EventLog
 
 # this is the Alembic Config object
 config = context.config

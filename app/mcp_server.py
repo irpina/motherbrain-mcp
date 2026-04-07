@@ -15,7 +15,7 @@ import json
 import time
 from datetime import datetime, timezone, timedelta
 from types import SimpleNamespace
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP, Context
 
 from app.db.session import AsyncSessionLocal
 from app.services.system_state import get_system_state as _get_system_state
@@ -30,6 +30,21 @@ async def _get_db():
         return session
 
 
+def _get_caller_name(ctx: Context) -> str | None:
+    """Extract the calling client's name from the MCP initialize handshake.
+    
+    This reads clientInfo.name from the initialize request that established
+    the current MCP session. Returns None if not available.
+    """
+    try:
+        params = ctx.request_context.session.client_params
+        if params and params.clientInfo:
+            return params.clientInfo.name
+    except Exception:
+        pass
+    return None
+
+
 def _infer_topic(service_id: str, tool_name: str) -> str:
     """Infer the event topic from service_id and tool_name."""
     if "agentchattr" in service_id or tool_name.startswith("chat_"):
@@ -42,20 +57,37 @@ mcp = FastMCP(
     "motherbrain",
     streamable_http_path="/",  # Mount at root so FastAPI prefix works
     instructions=(
-        "Motherbrain MCP Server — Gateway to registered MCP services.\n\n"
-        "Use get_system_state() to discover what's available.\n"
-        "Use list_tools(service_id) to see tools on a specific service.\n"
-        "Use call_tool(service_id, tool_name, arguments) to invoke any tool.\n\n"
-        "Example flow:\n"
-        "1. get_system_state() → see registered MCP services\n"
-        "2. list_tools('agentchattr-mcp') → ['chat_send', 'chat_read', ...]\n"
-        "3. call_tool('agentchattr-mcp', 'chat_send', {\"channel\": \"general\", \"message\": \"hello\"})"
+        "# Welcome to Motherbrain\n\n"
+        "Motherbrain is a coordination hub for AI agents and humans. "
+        "It connects services, routes jobs, and logs all activity in one place.\n\n"
+        "## Startup sequence (do this when you first connect)\n\n"
+        "1. Call `discover()` — get a live orientation: what services are online, "
+        "who's here, and the full how-to guide.\n\n"
+        "2. Register your heartbeat loop — POST to "
+        "`http://localhost:8000/api/heartbeat/{your_name}` every 30 seconds.\n"
+        "   - This keeps you visible as online and delivers any triggers (messages addressed to you).\n"
+        "   - If you have a DB agent_id (from POST /agents/register), append "
+        "`?agent_id={your_id}` so the Agents panel stays current.\n\n"
+        "3. On each heartbeat response, check `triggers` — these are jobs or messages "
+        "sent directly to you. Process each one and respond via chat.\n\n"
+        "4. Communicate using `call_tool('agentchattr-mcp', 'chat_send', "
+        "{sender, channel, message, choices})` — always use channel `motherbrain`.\n\n"
+        "5. After any action, call `get_event_log()` to see what happened and "
+        "decide your next step.\n\n"
+        "## Key tools\n"
+        "- `discover()` — full live orientation\n"
+        "- `get_event_log(topic, service_id)` — unified activity log\n"
+        "- `call_tool(service_id, tool_name, arguments)` — invoke any connected service\n"
+        "- `get_context('skills.name')` — fetch a reusable skill/prompt\n"
+        "- `get_system_state()` — raw JSON system state\n\n"
+        "Start with `discover()` to see what's live right now.\n\n"
+        "For the full operating manual, call `get_context('skills.guide')`."
     ),
 )
 
 
 @mcp.tool()
-async def discover() -> str:
+async def discover(ctx: Context) -> str:
     """What is Motherbrain and how do I use it?
     
     Returns a plain-language orientation explaining the system,
@@ -84,7 +116,7 @@ async def discover() -> str:
         now = datetime.now(timezone.utc)
         for name, last_seen in agent_registry.items():
             age = (now - last_seen).total_seconds()
-            if age < 60:
+            if age < 300:
                 agents_lines.append(f"- 🟢 {name} (online, last seen {int(age)}s ago)")
             else:
                 agents_lines.append(f"- 🟡 {name} (away, last seen {int(age)}s ago)")
@@ -122,17 +154,28 @@ services, routes messages, and tracks activity across a multi-agent session.
 
 6. **Inspect the ecosystem** — get_system_state() for raw state,
    list_tools(service_id) to see what a service can do.
+
+7. **Skill store** — context entries under skills.* are reusable agent skills.
+   get_context("skills.summarize") to fetch a skill prompt.
+   set_context("skills.my_skill", '{{"prompt": "..."}}', "description") to store one.
+   Browse all skills at http://localhost:3000/context.
+
+## Full operating manual
+Call `get_context("skills.guide")` for the complete guide:
+startup sequence, tool reference, registered services, agent identity,
+communication patterns, and tips.
 """
         # Log this system call
         duration_ms = int((time.time() - start_time) * 1000)
-        append_event(
+        await append_event(
             topic="system",
             service_id="motherbrain",
             tool_name="discover",
             arguments={},
             response={"services": len(services), "agents": len(agent_registry)},
             status="ok",
-            duration_ms=duration_ms
+            duration_ms=duration_ms,
+            agent_id=_get_caller_name(ctx)
         )
         
         return result
@@ -141,7 +184,7 @@ services, routes messages, and tracks activity across a multi-agent session.
 
 
 @mcp.tool()
-async def get_system_state() -> str:
+async def get_system_state(ctx: Context) -> str:
     """Get full system state for situational awareness.
     
     Returns information about all registered MCP services, online agents,
@@ -164,14 +207,15 @@ async def get_system_state() -> str:
         
         # Log this system call
         duration_ms = int((time.time() - start_time) * 1000)
-        append_event(
+        await append_event(
             topic="system",
             service_id="motherbrain",
             tool_name="get_system_state",
             arguments={},
             response={"services": state.get("mcp_services", {}).get("count", 0)},
             status="ok",
-            duration_ms=duration_ms
+            duration_ms=duration_ms,
+            agent_id=_get_caller_name(ctx)
         )
         
         return result
@@ -180,7 +224,7 @@ async def get_system_state() -> str:
 
 
 @mcp.tool()
-async def list_tools(service_id: str) -> str:
+async def list_tools(service_id: str, ctx: Context) -> str:
     """List available tools on a registered MCP service.
     
     Args:
@@ -203,14 +247,15 @@ async def list_tools(service_id: str) -> str:
         
         if not service:
             error_result = {"error": f"Service '{service_id}' not found"}
-            append_event(
+            await append_event(
                 topic="system",
                 service_id="motherbrain",
                 tool_name="list_tools",
                 arguments={"service_id": service_id},
                 response=error_result,
                 status="error",
-                duration_ms=duration_ms
+                duration_ms=duration_ms,
+                agent_id=_get_caller_name(ctx)
             )
             return json.dumps(error_result)
         
@@ -223,14 +268,15 @@ async def list_tools(service_id: str) -> str:
         }, indent=2)
         
         # Log this system call
-        append_event(
+        await append_event(
             topic="system",
             service_id="motherbrain",
             tool_name="list_tools",
             arguments={"service_id": service_id},
             response={"tools_count": len(tools)},
             status="ok",
-            duration_ms=duration_ms
+            duration_ms=duration_ms,
+            agent_id=_get_caller_name(ctx)
         )
         
         return result
@@ -239,7 +285,7 @@ async def list_tools(service_id: str) -> str:
 
 
 @mcp.tool()
-async def call_tool(service_id: str, tool_name: str, arguments: dict) -> str:
+async def call_tool(service_id: str, tool_name: str, arguments: dict, ctx: Context) -> str:
     """Call a tool on a registered MCP service.
     
     This is the main proxy tool — it forwards your call to the target
@@ -275,14 +321,15 @@ async def call_tool(service_id: str, tool_name: str, arguments: dict) -> str:
             error_result = {"error": f"Service '{service_id}' not found"}
             # Log the error
             duration_ms = int((time.time() - start_time) * 1000)
-            append_event(
+            await append_event(
                 topic=topic,
                 service_id=service_id,
                 tool_name=tool_name,
                 arguments=arguments,
                 response=error_result,
                 status="error",
-                duration_ms=duration_ms
+                duration_ms=duration_ms,
+                agent_id=_get_caller_name(ctx)
             )
             return json.dumps(error_result)
         
@@ -290,14 +337,15 @@ async def call_tool(service_id: str, tool_name: str, arguments: dict) -> str:
             error_result = {"error": f"Service '{service_id}' is offline"}
             # Log the error
             duration_ms = int((time.time() - start_time) * 1000)
-            append_event(
+            await append_event(
                 topic=topic,
                 service_id=service_id,
                 tool_name=tool_name,
                 arguments=arguments,
                 response=error_result,
                 status="error",
-                duration_ms=duration_ms
+                duration_ms=duration_ms,
+                agent_id=_get_caller_name(ctx)
             )
             return json.dumps(error_result)
         
@@ -312,14 +360,15 @@ async def call_tool(service_id: str, tool_name: str, arguments: dict) -> str:
             result = await mcp_proxy.call_mcp_service(service, job_proxy)
             # Log the success
             duration_ms = int((time.time() - start_time) * 1000)
-            append_event(
+            await append_event(
                 topic=topic,
                 service_id=service_id,
                 tool_name=tool_name,
                 arguments=arguments,
                 response=result,
                 status="ok",
-                duration_ms=duration_ms
+                duration_ms=duration_ms,
+                agent_id=_get_caller_name(ctx)
             )
             
             return json.dumps({
@@ -337,14 +386,15 @@ async def call_tool(service_id: str, tool_name: str, arguments: dict) -> str:
             }
             # Log the error
             duration_ms = int((time.time() - start_time) * 1000)
-            append_event(
+            await append_event(
                 topic=topic,
                 service_id=service_id,
                 tool_name=tool_name,
                 arguments=arguments,
                 response=error_result,
                 status="error",
-                duration_ms=duration_ms
+                duration_ms=duration_ms,
+                agent_id=_get_caller_name(ctx)
             )
             
             return json.dumps(error_result)
@@ -389,9 +439,116 @@ async def get_event_log(
         get_event_log(service_id="agentchattr-mcp") → only agentchatter calls
         get_event_log(topic="chat", since_id=42) → chat events newer than #42
     """
-    events = get_events(limit=limit, since_id=since_id, topic=topic, service_id=service_id)
+    events = await get_events(limit=limit, since_id=since_id, topic=topic, service_id=service_id)
     return json.dumps({
         "count": len(events),
         "filters": {"topic": topic or None, "service_id": service_id or None},
         "events": events
     }, indent=2)
+
+
+@mcp.tool()
+async def get_context(key: str, mcp_ctx: Context) -> str:
+    """Fetch a value from the shared context/skill store.
+
+    Use the skills.* prefix to retrieve agent skills:
+      get_context("skills.summarize") → returns the summarizer prompt
+      get_context("skills.code_review") → returns the code review prompt
+
+    Returns the stored value as JSON, or an error if the key doesn't exist.
+    """
+    from app.services.project_context_service import get_context as _get_context
+
+    db = await _get_db()
+    try:
+        start = time.time()
+        ctx = await _get_context(db, key)
+        duration_ms = int((time.time() - start) * 1000)
+
+        if not ctx:
+            result = {"error": f"Key '{key}' not found"}
+            await append_event(
+                topic="system",
+                service_id="motherbrain",
+                tool_name="get_context",
+                arguments={"key": key},
+                response=result,
+                status="error",
+                duration_ms=duration_ms,
+                agent_id=_get_caller_name(mcp_ctx)
+            )
+            return json.dumps(result)
+
+        result = {
+            "key": ctx.context_key,
+            "value": ctx.value,
+            "description": ctx.description,
+            "updated_by": ctx.updated_by,
+            "last_updated": str(ctx.last_updated)
+        }
+        await append_event(
+            topic="system",
+            service_id="motherbrain",
+            tool_name="get_context",
+            arguments={"key": key},
+            response={"found": True},
+            status="ok",
+            duration_ms=duration_ms,
+            agent_id=_get_caller_name(mcp_ctx)
+        )
+        return json.dumps(result, indent=2)
+    finally:
+        await db.close()
+
+
+@mcp.tool()
+async def set_context(key: str, value_json: str, description: str = "", mcp_ctx: Context = None) -> str:
+    """Store a value in the shared context/skill store.
+
+    For skills, use the skills.* prefix and put the prompt in value_json:
+      set_context(
+        "skills.summarize",
+        '{"prompt": "Given the following text, return a concise summary..."}',
+        "Summarization skill"
+      )
+
+    value_json must be valid JSON.
+    Returns the stored entry on success.
+    """
+    from app.services.project_context_service import create_or_update_context
+    from app.schemas.project_context import ProjectContextCreate
+
+    db = await _get_db()
+    try:
+        start = time.time()
+        try:
+            value = json.loads(value_json)
+        except json.JSONDecodeError as e:
+            return json.dumps({"error": f"Invalid JSON: {e}"})
+
+        ctx = await create_or_update_context(
+            db, key, ProjectContextCreate(
+                value=value,
+                updated_by="motherbrain-mcp",
+                description=description or None,
+            )
+        )
+        duration_ms = int((time.time() - start) * 1000)
+        result = {
+            "key": ctx.context_key,
+            "value": ctx.value,
+            "description": ctx.description
+        }
+        await append_event(
+            topic="system",
+            service_id="motherbrain",
+            tool_name="set_context",
+            arguments={"key": key},
+            response={"stored": True},
+            status="ok",
+            duration_ms=duration_ms,
+            agent_id=_get_caller_name(mcp_ctx) if mcp_ctx else None
+        )
+        return json.dumps(result, indent=2)
+    finally:
+        await db.close()

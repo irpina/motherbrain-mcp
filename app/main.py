@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.db.init_db import init_db
 from app.api.routes import agents, jobs, context, messages, actions, mcp, system, events, heartbeat, event_log_routes
 from app.background.heartbeat import start_heartbeat_checker
+from app.background.health_check import start_health_checker
 from app.mcp_server import mcp as mcp_server
 
 # Cache the MCP app and access session manager
@@ -23,6 +24,7 @@ async def lifespan(app: FastAPI):
     # Startup: initialize DB and background tasks
     await init_db()
     heartbeat_task = asyncio.create_task(start_heartbeat_checker())
+    health_task = asyncio.create_task(start_health_checker())
     
     # Start MCP session manager (required for streamable-http transport)
     # This initializes the task group that handles concurrent sessions
@@ -32,6 +34,7 @@ async def lifespan(app: FastAPI):
     
     # Shutdown: cancel background tasks cleanly
     heartbeat_task.cancel()
+    health_task.cancel()
 
 
 app = FastAPI(

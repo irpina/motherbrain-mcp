@@ -144,10 +144,10 @@ async def _call_mcp_native(service: MCPService, job: Job, timeout: float) -> dic
             })
             init_resp.raise_for_status()
             session_id = init_resp.headers.get("mcp-session-id")
-            if not session_id:
-                raise MCPServiceError(service.service_id, "MCP server did not return a session ID")
-
-            session_headers = {**headers, "mcp-session-id": session_id}
+            # Session ID is optional per MCP spec — stateless servers don't return one
+            session_headers = {**headers}
+            if session_id:
+                session_headers["mcp-session-id"] = session_id
 
             # Step 2: Send initialized notification (no response expected)
             await client.post(mcp_url, headers=session_headers, json={

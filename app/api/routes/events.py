@@ -1,9 +1,8 @@
 """Event API Routes — Generic event ingestion from MCP servers.
 
-Any MCP server can POST events to this endpoint. Events become
-pending jobs that the LLM discovers via GET /system/state.
-
-This is the "Leg 1" of the loop: MCP server → Motherbrain.
+Any MCP server can POST events to this endpoint. Events enqueue triggers
+for agent delivery via the heartbeat system. Jobs are explicitly created
+by the LLM or user — not auto-generated from events.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -12,8 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import verify_api_key
 from app.db.session import get_db
 from app.schemas.event import EventCreate
-from app.schemas.job import JobCreate, JobResponse
-from app.services import job_service
 from app.services import mcp_service_service
 from app.services.agent_registry import enqueue_trigger
 
@@ -21,7 +18,7 @@ from app.services.agent_registry import enqueue_trigger
 router = APIRouter(tags=["events"])
 
 
-@router.post("/events", response_model=JobResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/events", status_code=status.HTTP_200_OK)
 async def ingest_event(
     event: EventCreate,
     db: AsyncSession = Depends(get_db),
@@ -29,20 +26,15 @@ async def ingest_event(
 ):
     """Ingest an event from an MCP server.
     
-    Any registered MCP server can POST events here. The event becomes
-    a pending job that the LLM discovers via GET /system/state and
-    can act upon.
-    
-    This is the app-agnostic event bus pattern — MCP servers push
-    events to Motherbrain, Motherbrain stores them, LLM pulls and
-    decides what to do.
+    Events enqueue triggers for heartbeat delivery. They do NOT create jobs.
+    Jobs are explicitly created by LLMs or users via POST /jobs.
     
     Args:
         event: The event to ingest
         db: Database session
     
     Returns:
-        The created job (status=pending, waiting for LLM)
+        {"status": "ok", "triggers_enqueued": N}
     
     Raises:
         HTTPException 400: If service_id not registered
@@ -58,20 +50,12 @@ async def ingest_event(
                 "sender": "user",
                 "text": "@claude do something"
             },
-            "topic": "general"
+            "topic": "general",
+            "addressed_to": ["claude"]
         }
     
     Example response:
-        {
-            "job_id": "uuid",
-            "type": "message_received",
-            "payload": {...},
-            "status": "pending",
-            "target_type": "agent",
-            "created_by": "agentchattr-mcp",
-            "topic": "general",
-            ...
-        }
+        {"status": "ok", "triggers_enqueued": 1}
     """
     # Verify the service is registered
     service = await mcp_service_service.get_service(db, event.service_id)
@@ -82,37 +66,17 @@ async def ingest_event(
                    "Register via POST /mcp/register first."
         )
     
-    # Create a job from the event
-    # Events become jobs with target_type="agent" — the LLM will handle them
-    # If addressed_to is provided, assign to the first mentioned agent
-    job_create = JobCreate(
-        type=event.event_type,
-        payload=event.payload,
-        requirements=[],  # LLM will figure out what's needed
-        target_type="agent",  # Needs LLM intervention
-        topic=event.topic,
-        created_by=event.service_id,  # Track which service created this
-        assigned_agent=event.addressed_to[0] if event.addressed_to else None,
-    )
-    
-    job = await job_service.create_job(db, job_create)
-    
     # Enqueue trigger for heartbeat delivery if agent is addressed
-    # This enables push-like delivery via the heartbeat endpoint
     if event.addressed_to:
-        target_agent = event.addressed_to[0]
-        # Queue trigger regardless of agent online status
-        # Agent will receive it on next heartbeat (queue holds until ready)
-        enqueue_trigger(target_agent, {
-            "job_id": job.job_id,
-            "channel": event.topic,
-            "sender": event.payload.get("sender", "unknown"),
-            "text": event.payload.get("text", ""),
-            "addressed_to": target_agent,
-        })
+        for target_agent in event.addressed_to:
+            enqueue_trigger(target_agent, {
+                "channel": event.topic,
+                "sender": event.payload.get("sender", "unknown"),
+                "text": event.payload.get("text", ""),
+                "addressed_to": target_agent,
+            })
     
-    # Note: We don't dispatch via background task here.
-    # Events from MCP services create jobs that sit as "pending"
-    # until the LLM polls GET /system/state and decides what to do.
-    
-    return job
+    return {
+        "status": "ok",
+        "triggers_enqueued": len(event.addressed_to or [])
+    }

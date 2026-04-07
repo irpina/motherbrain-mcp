@@ -32,7 +32,7 @@ async def list_events(
             "events": [...]  # newest first
         }
     """
-    events = get_events(
+    events = await get_events(
         limit=limit,
         since_id=since_id,
         topic=topic,

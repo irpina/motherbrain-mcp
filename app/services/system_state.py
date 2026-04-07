@@ -55,7 +55,7 @@ async def get_system_state(db: AsyncSession, action_limit: int = 20) -> dict:
         is_online = False
         if agent.last_heartbeat:
             age = datetime.now(timezone.utc) - agent.last_heartbeat
-            is_online = age < timedelta(seconds=60)
+            is_online = age < timedelta(seconds=300)
         
         agent_summary.append({
             "agent_id": agent.agent_id,

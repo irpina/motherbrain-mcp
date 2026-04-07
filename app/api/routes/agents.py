@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import verify_api_key, get_current_agent
 from app.db.session import get_db
@@ -19,7 +19,7 @@ async def register_agent(
     _: str = Depends(verify_api_key)
 ):
     """Register a new agent. Returns the agent including its auth token."""
-    agent = await agent_service.register_agent(db, agent_create)
+    agent, plaintext_token = await agent_service.register_agent(db, agent_create)
     # Log the registration action
     await create_action(
         db,
@@ -30,7 +30,18 @@ async def register_agent(
             details={"platform": agent.platform, "capabilities": agent.capabilities}
         )
     )
-    return agent
+    # Return the response with the plaintext token (only time it's visible)
+    return AgentRegistrationResponse(
+        agent_id=agent.agent_id,
+        name=agent.name,
+        hostname=agent.hostname,
+        platform=agent.platform,
+        capabilities=agent.capabilities,
+        status=agent.status,
+        presence=agent.presence,
+        last_heartbeat=agent.last_heartbeat,
+        token=plaintext_token
+    )
 
 
 @router.post("/heartbeat")
@@ -53,6 +64,29 @@ async def list_agents(
     """List all registered agents. Admin only."""
     agents = await agent_service.list_agents(db)
     return agents
+
+
+@router.get("/by-name/{name}", response_model=AgentResponse)
+async def get_agent_by_name_route(
+    name: str,
+    hostname: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(verify_api_key)
+):
+    """Get a specific agent by its name and optional hostname.
+    
+    This endpoint allows agents to check if they already exist
+    without needing their authentication token. If hostname is
+    provided, returns the specific agent on that machine.
+    """
+    if hostname:
+        agent = await agent_service.get_agent_by_name_and_hostname(db, name, hostname)
+    else:
+        # Return first match if no hostname given
+        agent = await agent_service.get_agent_by_name(db, name)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return agent
 
 
 @router.get("/{agent_id}/jobs", response_model=list[JobResponse])

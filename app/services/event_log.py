@@ -1,43 +1,28 @@
-"""Event Log Service — Kafka-style append-only log for MCP tool calls.
+"""Event Log Service — Database-backed Kafka-style append-only log.
 
-This module provides an in-memory event log that records every tool call
-proxied through Motherbrain. The LLM polls get_event_log() to read results
-and decide next actions.
+This module provides persistent event logging for all tool calls
+proxied through Motherbrain. Events are stored in PostgreSQL for
+durability across restarts.
 """
 
 from datetime import datetime, timezone
-from typing import Any
-from dataclasses import dataclass, asdict
+from typing import Any, Optional
+from sqlalchemy import select, desc, delete
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.db.session import AsyncSessionLocal
+from app.models.event_log import EventLog
 
 
-@dataclass
-class MCPEvent:
-    """A single MCP tool call event."""
-    id: int
-    timestamp: str
-    topic: str  # "chat", "proxy", "heartbeat", "job", "system", etc.
-    service_id: str
-    tool_name: str
-    arguments: dict
-    response: Any
-    status: str  # "ok" | "error"
-    duration_ms: int
-
-
-# In-memory event store
-_events: list[MCPEvent] = []
-_next_id: int = 1
-
-
-def append_event(
+async def append_event(
     topic: str,
     service_id: str,
     tool_name: str,
     arguments: dict,
     response: Any,
     status: str,
-    duration_ms: int
-) -> MCPEvent:
+    duration_ms: int,
+    agent_id: Optional[str] = None,
+) -> EventLog:
     """Append a new event to the log.
     
     Args:
@@ -48,35 +33,29 @@ def append_event(
         response: The raw response from the service
         status: "ok" or "error"
         duration_ms: How long the call took
+        agent_id: Optional ID of the agent that initiated the call
         
     Returns:
-        The created event
+        The created event log entry
     """
-    global _next_id
-    
-    event = MCPEvent(
-        id=_next_id,
-        timestamp=datetime.now(timezone.utc).isoformat(),
-        topic=topic,
-        service_id=service_id,
-        tool_name=tool_name,
-        arguments=arguments,
-        response=response,
-        status=status,
-        duration_ms=duration_ms
-    )
-    
-    _events.append(event)
-    _next_id += 1
-    
-    # Keep only last 1000 events to prevent unbounded growth
-    if len(_events) > 1000:
-        _events.pop(0)
-    
-    return event
+    async with AsyncSessionLocal() as db:
+        event = EventLog(
+            topic=topic,
+            service_id=service_id or None,
+            agent_id=agent_id,
+            tool_name=tool_name,
+            arguments=arguments,
+            response=response,
+            status=status,
+            duration_ms=duration_ms
+        )
+        db.add(event)
+        await db.commit()
+        await db.refresh(event)
+        return event
 
 
-def get_events(
+async def get_events(
     limit: int = 20,
     since_id: int = 0,
     topic: str = "",
@@ -93,30 +72,61 @@ def get_events(
     Returns:
         List of events as dicts, newest first
     """
-    # Filter events newer than since_id
-    filtered = [e for e in _events if e.id > since_id]
-    
-    # Apply topic filter if specified
-    if topic:
-        filtered = [e for e in filtered if e.topic == topic]
-    
-    # Apply service_id filter if specified
-    if service_id:
-        filtered = [e for e in filtered if e.service_id == service_id]
-    
-    # Get last 'limit' events, reversed to be newest-first
-    result = filtered[-limit:] if limit < len(filtered) else filtered
-    
-    return [asdict(e) for e in reversed(result)]
+    async with AsyncSessionLocal() as db:
+        query = select(EventLog)
+        
+        # Apply since_id filter (for polling)
+        if since_id > 0:
+            query = query.where(EventLog.id > since_id)
+        
+        if topic:
+            query = query.where(EventLog.topic == topic)
+        
+        if service_id:
+            query = query.where(EventLog.service_id == service_id)
+        
+        # Order by id descending (newest first), then limit
+        query = query.order_by(desc(EventLog.id)).limit(limit)
+        
+        result = await db.execute(query)
+        events = result.scalars().all()
+        
+        return [_event_to_dict(e) for e in events]
 
 
-def get_latest_id() -> int:
+async def get_latest_id() -> int:
     """Get the ID of the most recent event (for polling)."""
-    return _events[-1].id if _events else 0
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(EventLog.id)
+            .order_by(desc(EventLog.id))
+            .limit(1)
+        )
+        latest = result.scalar_one_or_none()
+        return latest if latest else 0
 
 
-def clear_events():
+async def clear_events() -> None:
     """Clear all events (for testing)."""
-    global _events, _next_id
-    _events = []
-    _next_id = 1
+    async with AsyncSessionLocal() as db:
+        await db.execute(delete(EventLog))
+        await db.commit()
+
+
+def _event_to_dict(event: EventLog) -> dict:
+    """Convert an EventLog ORM model to a dictionary.
+    
+    Maintains backward compatibility with the previous dataclass format.
+    """
+    return {
+        "id": event.id,
+        "timestamp": event.created_at.isoformat() if event.created_at else None,
+        "topic": event.topic,
+        "service_id": event.service_id,
+        "agent_id": event.agent_id,
+        "tool_name": event.tool_name,
+        "arguments": event.arguments,
+        "response": event.response,
+        "status": event.status,
+        "duration_ms": event.duration_ms
+    }

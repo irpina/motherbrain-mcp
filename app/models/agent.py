@@ -24,8 +24,29 @@ class Agent(Base):
     __tablename__ = "agents"
 
     agent_id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid4()))
+    name: Mapped[str | None] = mapped_column(String, nullable=True)
+    hostname: Mapped[str | None] = mapped_column(String, nullable=True)
     platform: Mapped[str] = mapped_column(String)
     capabilities: Mapped[dict] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(String, default="online")
     last_heartbeat: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    token: Mapped[str] = mapped_column(String, unique=True)
+    token_hash: Mapped[str] = mapped_column(String, unique=True)
+
+    @property
+    def presence(self) -> str:
+        """Calculate presence based on last heartbeat.
+        
+        Returns:
+            "active" - heartbeat within 5 minutes
+            "idle" - heartbeat within 2 hours
+            "away" - heartbeat older than 2 hours
+            "registered" - never heartbeated
+        """
+        if not self.last_heartbeat:
+            return "registered"
+        age = (datetime.now(timezone.utc) - self.last_heartbeat).total_seconds()
+        if age < 300:      # 5 min
+            return "active"
+        if age < 7200:     # 2 hours
+            return "idle"
+        return "away"
