@@ -10,6 +10,10 @@ Discovery & Management:
 - register_service(...) — Register or update an MCP service
 - remove_service(service_id) — Unregister a service
 
+Job Dispatch:
+- create_job(type, payload, ...) — Dispatch work to registered agents
+- get_job_status(job_id) — Check progress and results
+
 Proxy & Context:
 - call_tool(service_id, tool_name, arguments) — Route calls to target MCP
 - get_event_log(...) — Read the unified activity log
@@ -33,6 +37,8 @@ from app.services.event_log import append_event, get_events
 from app.services.agent_registry import agent_registry
 from app.background.health_check import _probe
 from app.schemas.mcp_service import MCPServiceCreate, MCPServiceUpdate
+from app.services.job_service import create_job as _create_job, get_job
+from app.schemas.job import JobCreate
 
 
 async def _get_db():
@@ -442,6 +448,149 @@ async def remove_service(service_id: str, ctx: Context) -> str:
             tool_name="remove_service",
             arguments={"service_id": service_id},
             response=result,
+            status="ok",
+            duration_ms=duration_ms,
+            agent_id=_get_caller_name(ctx)
+        )
+        
+        return json.dumps(result, indent=2)
+    finally:
+        await db.close()
+
+
+@mcp.tool()
+async def create_job(
+    type: str,
+    payload: dict,
+    ctx: Context,
+    assigned_agent: str = "",
+    priority: str = "medium",
+    requirements: list[str] = [],
+) -> str:
+    """Dispatch a job to a registered agent.
+
+    Creates a pending job that will be picked up by an agent on their next
+    heartbeat. Use discover() to see which agents are online first.
+
+    Args:
+        type: Job type describing the task (e.g., "summarize", "code_review", "search")
+        payload: Arbitrary dict with task data (e.g., {"text": "...", "url": "..."})
+        assigned_agent: Agent name to assign directly (e.g., "kimi"). If empty,
+                        any agent matching requirements can claim it.
+        priority: "low", "medium" (default), or "high"
+        requirements: List of agent capabilities required (e.g., ["python", "search"])
+
+    Returns:
+        JSON with job_id, status, assigned_agent, and a tip to poll get_job_status.
+
+    Example:
+        create_job(
+            "summarize",
+            {"url": "https://example.com/article"},
+            assigned_agent="kimi",
+            priority="high"
+        )
+    """
+    start_time = time.time()
+    db = await _get_db()
+    
+    try:
+        # Build JobCreate schema
+        job_data = JobCreate(
+            type=type,
+            payload=payload,
+            priority=priority,
+            requirements=requirements,
+            assigned_agent=assigned_agent or None,
+            created_by=_get_caller_name(ctx) or "mcp-client",
+            target_type="agent"
+        )
+        
+        # Create the job
+        job = await _create_job(db, job_data)
+        
+        duration_ms = int((time.time() - start_time) * 1000)
+        
+        result = {
+            "job_id": job.job_id,
+            "type": job.type,
+            "status": job.status,
+            "priority": job.priority,
+            "assigned_agent": job.assigned_agent,
+            "created_by": job.created_by,
+            "tip": f"Call get_job_status('{job.job_id}') to check progress"
+        }
+        
+        # Log the action
+        await append_event(
+            topic="job",
+            service_id="motherbrain",
+            tool_name="create_job",
+            arguments={"type": type, "assigned_agent": assigned_agent, "priority": priority},
+            response={"job_id": job.job_id, "status": job.status},
+            status="ok",
+            duration_ms=duration_ms,
+            agent_id=_get_caller_name(ctx)
+        )
+        
+        return json.dumps(result, indent=2)
+    finally:
+        await db.close()
+
+
+@mcp.tool()
+async def get_job_status(job_id: str, ctx: Context) -> str:
+    """Check the status of a dispatched job.
+
+    Args:
+        job_id: The job UUID returned by create_job
+
+    Returns:
+        JSON with current status, assigned agent, result, and error if any.
+        Status values: "pending", "assigned", "running", "completed", "failed"
+    """
+    start_time = time.time()
+    db = await _get_db()
+    
+    try:
+        # Get the job
+        job = await get_job(db, job_id)
+        
+        if not job:
+            error_result = {"error": f"Job '{job_id}' not found"}
+            duration_ms = int((time.time() - start_time) * 1000)
+            await append_event(
+                topic="job",
+                service_id="motherbrain",
+                tool_name="get_job_status",
+                arguments={"job_id": job_id},
+                response=error_result,
+                status="error",
+                duration_ms=duration_ms,
+                agent_id=_get_caller_name(ctx)
+            )
+            return json.dumps(error_result)
+        
+        duration_ms = int((time.time() - start_time) * 1000)
+        
+        result = {
+            "job_id": job.job_id,
+            "type": job.type,
+            "status": job.status,
+            "assigned_agent": job.assigned_agent,
+            "priority": job.priority,
+            "result": job.result,
+            "error": job.error,
+            "created_by": job.created_by
+        }
+        
+        # Log the action
+        await append_event(
+            topic="job",
+            service_id="motherbrain",
+            tool_name="get_job_status",
+            arguments={"job_id": job_id},
+            response={"status": job.status},
             status="ok",
             duration_ms=duration_ms,
             agent_id=_get_caller_name(ctx)
