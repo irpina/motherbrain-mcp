@@ -1,11 +1,20 @@
 """Motherbrain MCP Server — Meta-tools for proxying to registered MCP services.
 
-This FastMCP server exposes 3 tools that let LLMs discover and call
+This FastMCP server exposes tools that let LLMs discover, manage, and call
 any registered MCP service through Motherbrain:
 
-1. get_system_state() — Discover what's available
-2. list_tools(service_id) — List tools on a specific service  
-3. call_tool(service_id, tool_name, arguments) — Route calls to target MCP
+Discovery & Management:
+- discover() — Live orientation to the system
+- get_system_state() — Full system state as JSON
+- list_tools(service_id) — List tools on a specific service
+- register_service(...) — Register or update an MCP service
+- remove_service(service_id) — Unregister a service
+
+Proxy & Context:
+- call_tool(service_id, tool_name, arguments) — Route calls to target MCP
+- get_event_log(...) — Read the unified activity log
+- get_context(key) — Fetch from shared context/skill store
+- set_context(key, value_json, ...) — Store in shared context
 
 The LLM connects to Motherbrain (port 8000/mcp) and can access ALL
 registered MCP services through a single endpoint.
@@ -22,6 +31,8 @@ from app.services.system_state import get_system_state as _get_system_state
 from app.services import mcp_service_service, mcp_proxy
 from app.services.event_log import append_event, get_events
 from app.services.agent_registry import agent_registry
+from app.background.health_check import _probe
+from app.schemas.mcp_service import MCPServiceCreate, MCPServiceUpdate
 
 
 async def _get_db():
@@ -280,6 +291,163 @@ async def list_tools(service_id: str, ctx: Context) -> str:
         )
         
         return result
+    finally:
+        await db.close()
+
+
+@mcp.tool()
+async def register_service(
+    service_id: str,
+    name: str,
+    endpoint: str,
+    capabilities: list[str],
+    ctx: Context,
+    protocol: str = "mcp",
+) -> str:
+    """Register a new MCP service with Motherbrain, or update an existing one.
+
+    Once registered, the service is health-probed immediately and every 30s
+    thereafter. Use call_tool(service_id, ...) to invoke its tools.
+
+    Args:
+        service_id: Unique identifier (e.g., "my-search-service")
+        name: Human-readable name (e.g., "My Search Service")
+        endpoint: HTTP URL where the service is running (e.g., "http://localhost:8010")
+        capabilities: List of tool names this service exposes (e.g., ["search", "index"])
+        protocol: "mcp" for MCP JSON-RPC services (default), "rest" for legacy REST
+    
+    Returns:
+        JSON with registered service details and initial health status.
+    
+    Example:
+        register_service(
+            "brave-search",
+            "Brave Search",
+            "http://localhost:8004",
+            ["brave_web_search", "brave_local_search"]
+        )
+    """
+    start_time = time.time()
+    db = await _get_db()
+    
+    try:
+        # Check if service already exists
+        existing = await mcp_service_service.get_service(db, service_id)
+        
+        if existing:
+            # Update existing service
+            update_data = MCPServiceUpdate(
+                name=name,
+                endpoint=endpoint,
+                capabilities=capabilities,
+                protocol=protocol
+            )
+            service = await mcp_service_service.update_service(db, service_id, update_data)
+            action = "updated"
+        else:
+            # Create new service
+            create_data = MCPServiceCreate(
+                service_id=service_id,
+                name=name,
+                endpoint=endpoint,
+                capabilities=capabilities,
+                protocol=protocol
+            )
+            service = await mcp_service_service.register_service(db, create_data)
+            action = "registered"
+        
+        # Immediately probe the endpoint
+        is_online = await _probe(endpoint)
+        if not is_online:
+            await mcp_service_service.update_service_status(db, service_id, "offline")
+            service.status = "offline"
+        
+        duration_ms = int((time.time() - start_time) * 1000)
+        
+        result = {
+            "service_id": service.service_id,
+            "name": service.name,
+            "endpoint": service.endpoint,
+            "capabilities": service.capabilities,
+            "protocol": service.protocol,
+            "status": service.status,
+            "action": action
+        }
+        
+        # Log the action
+        await append_event(
+            topic="system",
+            service_id="motherbrain",
+            tool_name="register_service",
+            arguments={"service_id": service_id, "name": name, "endpoint": endpoint},
+            response=result,
+            status="ok",
+            duration_ms=duration_ms,
+            agent_id=_get_caller_name(ctx)
+        )
+        
+        return json.dumps(result, indent=2)
+    finally:
+        await db.close()
+
+
+@mcp.tool()
+async def remove_service(service_id: str, ctx: Context) -> str:
+    """Unregister an MCP service from Motherbrain.
+
+    Removes the service from the registry and stops health monitoring.
+    Does not affect the service process itself.
+
+    Args:
+        service_id: The service ID to remove
+    
+    Returns:
+        Confirmation JSON.
+    """
+    start_time = time.time()
+    db = await _get_db()
+    
+    try:
+        # Check if service exists
+        existing = await mcp_service_service.get_service(db, service_id)
+        
+        if not existing:
+            error_result = {"error": f"Service '{service_id}' not found"}
+            duration_ms = int((time.time() - start_time) * 1000)
+            await append_event(
+                topic="system",
+                service_id="motherbrain",
+                tool_name="remove_service",
+                arguments={"service_id": service_id},
+                response=error_result,
+                status="error",
+                duration_ms=duration_ms,
+                agent_id=_get_caller_name(ctx)
+            )
+            return json.dumps(error_result)
+        
+        # Delete the service
+        await mcp_service_service.delete_service(db, service_id)
+        
+        duration_ms = int((time.time() - start_time) * 1000)
+        result = {
+            "service_id": service_id,
+            "action": "removed"
+        }
+        
+        # Log the action
+        await append_event(
+            topic="system",
+            service_id="motherbrain",
+            tool_name="remove_service",
+            arguments={"service_id": service_id},
+            response=result,
+            status="ok",
+            duration_ms=duration_ms,
+            agent_id=_get_caller_name(ctx)
+        )
+        
+        return json.dumps(result, indent=2)
     finally:
         await db.close()
 
