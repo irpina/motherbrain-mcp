@@ -69,6 +69,82 @@ def _infer_topic(service_id: str, tool_name: str) -> str:
     return "proxy"
 
 
+async def _discover_capabilities(endpoint: str) -> list[str]:
+    """Call tools/list on an MCP endpoint and return tool names.
+    
+    Uses the same MCP session handshake as mcp_proxy._call_mcp_native.
+    Returns empty list on any failure — callers must treat this as best-effort.
+    """
+    from urllib.parse import urlparse
+    from uuid import uuid4
+    import httpx
+
+    mcp_url = endpoint.rstrip("/") + "/mcp"
+    parsed = urlparse(endpoint)
+    port_str = f":{parsed.port}" if parsed.port else ""
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+        "Host": f"localhost{port_str}",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            # Step 1: initialize
+            init_resp = await client.post(mcp_url, headers=headers, json={
+                "jsonrpc": "2.0",
+                "id": str(uuid4()),
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-03-26",
+                    "capabilities": {},
+                    "clientInfo": {"name": "motherbrain", "version": "1.0"}
+                }
+            })
+            init_resp.raise_for_status()
+            session_id = init_resp.headers.get("mcp-session-id")
+            session_headers = {**headers}
+            if session_id:
+                session_headers["mcp-session-id"] = session_id
+
+            # Step 2: initialized notification
+            await client.post(mcp_url, headers=session_headers, json={
+                "jsonrpc": "2.0",
+                "method": "notifications/initialized"
+            })
+
+            # Step 3: tools/list
+            list_resp = await client.post(mcp_url, headers=session_headers, json={
+                "jsonrpc": "2.0",
+                "id": str(uuid4()),
+                "method": "tools/list",
+                "params": {}
+            })
+            list_resp.raise_for_status()
+            
+            # Parse SSE or plain JSON (same as mcp_proxy._parse_mcp_response_body)
+            content_type = list_resp.headers.get("content-type", "")
+            if "text/event-stream" in content_type:
+                data = None
+                for line in list_resp.text.splitlines():
+                    if line.startswith("data:"):
+                        payload = line[len("data:"):].strip()
+                        if payload:
+                            data = json.loads(payload)
+                            break
+            else:
+                data = list_resp.json()
+
+            if not data:
+                return []
+
+            tools = data.get("result", {}).get("tools", [])
+            return [t["name"] for t in tools if "name" in t]
+
+    except Exception:
+        return []
+
+
 # Create FastMCP server
 mcp = FastMCP(
     "motherbrain",
@@ -306,8 +382,8 @@ async def register_service(
     service_id: str,
     name: str,
     endpoint: str,
-    capabilities: list[str],
     ctx: Context,
+    capabilities: list[str] = [],
     protocol: str = "mcp",
 ) -> str:
     """Register a new MCP service with Motherbrain, or update an existing one.
@@ -319,7 +395,8 @@ async def register_service(
         service_id: Unique identifier (e.g., "my-search-service")
         name: Human-readable name (e.g., "My Search Service")
         endpoint: HTTP URL where the service is running (e.g., "http://localhost:8010")
-        capabilities: List of tool names this service exposes (e.g., ["search", "index"])
+        capabilities: List of tool names this service exposes. If omitted, Motherbrain
+                      will attempt to auto-discover by calling tools/list on the endpoint.
         protocol: "mcp" for MCP JSON-RPC services (default), "rest" for legacy REST
     
     Returns:
@@ -368,16 +445,30 @@ async def register_service(
             await mcp_service_service.update_service_status(db, service_id, "offline")
             service.status = "offline"
         
+        # Auto-discover capabilities if none provided
+        capabilities_discovered = False
+        if not capabilities and is_online:
+            discovered = await _discover_capabilities(endpoint)
+            if discovered:
+                capabilities = discovered
+                capabilities_discovered = True
+                # Update the DB with discovered capabilities
+                await mcp_service_service.update_service(
+                    db, service_id,
+                    MCPServiceUpdate(capabilities=discovered)
+                )
+        
         duration_ms = int((time.time() - start_time) * 1000)
         
         result = {
             "service_id": service.service_id,
             "name": service.name,
             "endpoint": service.endpoint,
-            "capabilities": service.capabilities,
+            "capabilities": capabilities,
             "protocol": service.protocol,
             "status": service.status,
-            "action": action
+            "action": action,
+            "capabilities_discovered": capabilities_discovered
         }
         
         # Log the action
