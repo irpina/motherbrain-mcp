@@ -128,6 +128,21 @@ async def update_job_status(
     return updated_job
 
 
+@router.post("/{job_id}/force-status", response_model=JobResponse)
+async def admin_force_job_status(
+    job_id: str,
+    update: JobStatusUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(verify_api_key)
+):
+    """Admin override: update job status without ownership check. Requires API key."""
+    job = await job_service.get_job(db, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    updated_job = await job_service.update_status(db, job_id, update)
+    return updated_job
+
+
 @router.post("/{job_id}/logs")
 async def append_job_logs(
     job_id: str,

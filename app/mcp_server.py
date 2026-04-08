@@ -586,13 +586,20 @@ async def create_job(
     db = await _get_db()
     
     try:
+        # Resolve assigned_agent name → agent_id UUID
+        resolved_agent_id = None
+        if assigned_agent:
+            from app.services.agent_service import get_agent_by_name
+            resolved = await get_agent_by_name(db, assigned_agent)
+            resolved_agent_id = resolved.agent_id if resolved else assigned_agent
+        
         # Build JobCreate schema
         job_data = JobCreate(
             type=type,
             payload=payload,
             priority=priority,
             requirements=requirements,
-            assigned_agent=assigned_agent or None,
+            assigned_agent=resolved_agent_id,
             created_by=_get_caller_name(ctx) or "mcp-client",
             target_type="agent"
         )
@@ -608,6 +615,7 @@ async def create_job(
             "status": job.status,
             "priority": job.priority,
             "assigned_agent": job.assigned_agent,
+            "assigned_agent_name": assigned_agent or None,
             "created_by": job.created_by,
             "tip": f"Call get_job_status('{job.job_id}') to check progress"
         }
