@@ -39,6 +39,8 @@ from app.background.health_check import _probe
 from app.schemas.mcp_service import MCPServiceCreate, MCPServiceUpdate
 from app.services.job_service import create_job as _create_job, get_job
 from app.schemas.job import JobCreate
+from app.middleware.mcp_auth import get_current_user_token
+from app.queue import redis_queue
 
 
 async def _get_db():
@@ -272,6 +274,48 @@ communication patterns, and tips.
         )
         
         return result
+    finally:
+        await db.close()
+
+
+@mcp.tool()
+async def authenticate(token: str, ctx: Context) -> str:
+    """Authenticate this session with a Motherbrain user token.
+    
+    Call this once per session if your MCP client config does not include
+    an X-User-Token header. After authenticating, call_tool will enforce
+    your user's service permissions.
+    
+    Args:
+        token: Your Motherbrain user token (issued by an admin)
+    
+    Returns:
+        JSON with your user info and permitted services.
+    """
+    from app.services.user_service import get_user_by_token, get_user_groups
+    
+    db = await _get_db()
+    try:
+        user = await get_user_by_token(db, token)
+        if not user:
+            return json.dumps({"error": "Invalid or expired token"})
+        
+        # Store token in Redis keyed by caller name for this session
+        caller = _get_caller_name(ctx) or "unknown"
+        await redis_queue.set_key(f"mcp_auth:{caller}", token, ttl=3600)
+        
+        groups = await get_user_groups(db, user.user_id)
+        permitted = []
+        for g in groups:
+            permitted.extend(g.allowed_service_ids or [])
+        
+        return json.dumps({
+            "authenticated": True,
+            "user_id": user.user_id,
+            "name": user.name,
+            "role": user.role,
+            "permitted_services": list(set(permitted)) if user.role != "admin" else "all"
+        }, indent=2)
     finally:
         await db.close()
 
@@ -700,6 +744,30 @@ async def get_job_status(job_id: str, ctx: Context) -> str:
         await db.close()
 
 
+async def _resolve_user_token(ctx: Context) -> str | None:
+    """Resolve user token from header (via middleware) or authenticate tool (Redis).
+    
+    Method 1: Header token set by MCPAuthMiddleware ContextVar
+    Method 2: Token stored via authenticate tool in Redis (keyed by caller name)
+    
+    Returns:
+        The user token string, or None if not authenticated.
+    """
+    # Method 1: header (set by middleware ContextVar)
+    token = get_current_user_token()
+    if token:
+        return token
+    
+    # Method 2: authenticate tool (stored in Redis)
+    caller = _get_caller_name(ctx)
+    if caller:
+        token = await redis_queue.get_key(f"mcp_auth:{caller}")
+        if token:
+            return token
+    
+    return None
+
+
 @mcp.tool()
 async def call_tool(service_id: str, tool_name: str, arguments: dict, ctx: Context) -> str:
     """Call a tool on a registered MCP service.
@@ -764,6 +832,27 @@ async def call_tool(service_id: str, tool_name: str, arguments: dict, ctx: Conte
                 agent_id=_get_caller_name(ctx)
             )
             return json.dumps(error_result)
+        
+        # Permission check
+        token = await _resolve_user_token(ctx)
+        if token:
+            from app.services.permission_service import check_permission
+            async with AsyncSessionLocal() as perm_db:
+                allowed, reason = await check_permission(perm_db, token, service_id)
+            if not allowed:
+                error_result = {"error": f"Permission denied: {reason}"}
+                await append_event(
+                    topic=topic,
+                    service_id=service_id,
+                    tool_name=tool_name,
+                    arguments=arguments,
+                    response=error_result,
+                    status="error",
+                    duration_ms=int((time.time() - start_time) * 1000),
+                    agent_id=_get_caller_name(ctx)
+                )
+                return json.dumps(error_result)
+        # If no token: allow (unauthenticated sessions have full access for now)
         
         # Create a proxy job object (SimpleNamespace, not ORM)
         job_proxy = SimpleNamespace(
