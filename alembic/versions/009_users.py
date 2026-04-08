@@ -10,7 +10,7 @@ from uuid import uuid4
 
 # revision identifiers, used by Alembic.
 revision = '009_users'
-down_revision = '008_agent_hostname'
+down_revision = '008'
 branch_labels = None
 depends_on = None
 
