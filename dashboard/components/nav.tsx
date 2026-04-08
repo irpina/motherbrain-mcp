@@ -10,6 +10,8 @@ import {
   Database,
   Activity,
   Server,
+  Shield,
+  UserCog,
 } from "lucide-react";
 
 const navItems = [
@@ -19,6 +21,11 @@ const navItems = [
   { href: "/mcp", label: "MCP Services", icon: Server },
   { href: "/context", label: "Context", icon: Database },
   { href: "/activity", label: "Activity", icon: Activity },
+];
+
+const adminItems = [
+  { href: "/admin/users", label: "Users", icon: UserCog },
+  { href: "/admin/groups", label: "Groups", icon: Shield },
 ];
 
 export function Nav() {
@@ -55,6 +62,33 @@ export function Nav() {
           );
         })}
       </ul>
+      <div className="mt-8">
+        <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-3 mb-2">
+          Admin
+        </h2>
+        <ul className="space-y-1">
+          {adminItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+                    isActive
+                      ? "bg-slate-800 text-white"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  )}
+                >
+                  <Icon size={18} />
+                  {item.label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </nav>
   );
 }
