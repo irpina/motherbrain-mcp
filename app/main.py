@@ -2,6 +2,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.middleware.mcp_auth import MCPAuthMiddleware
 from app.db.init_db import init_db
 from app.api.routes import agents, jobs, context, messages, actions, mcp, system, events, heartbeat, event_log_routes
 from app.background.heartbeat import start_heartbeat_checker
@@ -43,6 +44,10 @@ app = FastAPI(
     version="0.2.0",
     lifespan=lifespan
 )
+
+# MCP Auth middleware (extracts user tokens from headers)
+# Add BEFORE CORS so it runs inside the CORS wrapper
+app.add_middleware(MCPAuthMiddleware)
 
 # CORS middleware for dashboard
 app.add_middleware(

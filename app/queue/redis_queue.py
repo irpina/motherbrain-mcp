@@ -30,3 +30,27 @@ async def append_log(job_id: str, log: str):
     logs = json.loads(existing) if existing else []
     logs.append(log)
     await client.set(log_key, json.dumps(logs))
+
+
+async def set_key(key: str, value: str, ttl: int = 3600):
+    """Store a value in Redis with a TTL.
+    
+    Args:
+        key: The Redis key
+        value: The value to store
+        ttl: Time to live in seconds (default: 1 hour)
+    """
+    await client.set(key, value, ex=ttl)
+
+
+async def get_key(key: str) -> str | None:
+    """Get a value from Redis.
+    
+    Args:
+        key: The Redis key
+    
+    Returns:
+        The value as a string, or None if not found or expired.
+    """
+    result = await client.get(key)
+    return result.decode() if result else None
