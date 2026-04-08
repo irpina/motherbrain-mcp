@@ -1,7 +1,7 @@
 "use client";
 
 import { api, type Job } from "@/lib/api";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { truncateId, getStatusColor, getPriorityColor } from "@/lib/utils";
 
 const statuses = ["pending", "assigned", "running", "completed", "failed"];
@@ -55,6 +55,20 @@ export function JobsPanel() {
 }
 
 function JobCard({ job }: { job: Job }) {
+  const queryClient = useQueryClient();
+  const isActive = !["completed", "failed"].includes(job.status);
+
+  const handleClose = async () => {
+    if (!window.confirm(`Close job "${job.type}"?`)) return;
+    try {
+      const res = await api.forceJobStatus(job.job_id, "completed");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+    } catch (err) {
+      alert(`Failed to close job: ${err}`);
+    }
+  };
+
   return (
     <div className="bg-white p-3 rounded-md border shadow-sm hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between gap-2">
@@ -78,6 +92,16 @@ function JobCard({ job }: { job: Job }) {
       {job.depends_on.length > 0 && (
         <div className="text-xs text-slate-500">
           Depends: {job.depends_on.map(truncateId).join(", ")}
+        </div>
+      )}
+      {isActive && (
+        <div className="mt-2 pt-2 border-t">
+          <button
+            onClick={handleClose}
+            className="text-xs text-slate-500 hover:text-slate-700 transition-colors"
+          >
+            Close
+          </button>
         </div>
       )}
     </div>
