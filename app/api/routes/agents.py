@@ -148,3 +148,16 @@ async def update_agent_status(
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     return {"status": "ok", "agent_id": agent.agent_id, "new_status": update.status}
+
+
+@router.delete("/{agent_id}")
+async def delete_agent(
+    agent_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(verify_api_key)
+):
+    """Remove an agent from the registry. Admin only."""
+    deleted = await agent_service.delete_agent(db, agent_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return {"status": "ok", "agent_id": agent_id}

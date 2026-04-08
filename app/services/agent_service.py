@@ -143,3 +143,21 @@ async def update_agent_status(db: AsyncSession, agent_id: str, status: str) -> A
         await db.commit()
         await db.refresh(agent)
     return agent
+
+
+async def delete_agent(db: AsyncSession, agent_id: str) -> bool:
+    """Delete an agent from the registry.
+    
+    Args:
+        db: Database session
+        agent_id: The agent's unique ID
+    
+    Returns:
+        True if agent was found and deleted, False otherwise
+    """
+    agent = await get_agent(db, agent_id)
+    if not agent:
+        return False
+    await db.delete(agent)
+    await db.commit()
+    return True

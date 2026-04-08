@@ -1,7 +1,7 @@
 "use client";
 
 import { api } from "@/lib/api";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   formatRelativeTime,
   truncateId,
@@ -22,11 +22,23 @@ const presenceLabels: Record<string, string> = {
 };
 
 export function AgentsPanel() {
+  const queryClient = useQueryClient();
   const { data: agents, isLoading } = useQuery({
     queryKey: ["agents"],
     queryFn: api.listAgents,
     refetchInterval: 5000,
   });
+
+  const handleRemove = async (agentId: string, displayName: string) => {
+    if (!window.confirm(`Remove agent "${displayName}"?`)) return;
+    try {
+      const res = await api.deleteAgent(agentId);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      queryClient.invalidateQueries({ queryKey: ["agents"] });
+    } catch (err) {
+      alert(`Failed to remove agent: ${err}`);
+    }
+  };
 
   if (isLoading) {
     return <div className="p-4">Loading agents...</div>;
@@ -47,6 +59,7 @@ export function AgentsPanel() {
               <th className="px-4 py-2 text-left font-medium">Platform</th>
               <th className="px-4 py-2 text-left font-medium">Capabilities</th>
               <th className="px-4 py-2 text-left font-medium">Last Heartbeat</th>
+              <th className="px-4 py-2 text-left font-medium">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -88,6 +101,14 @@ export function AgentsPanel() {
                   </td>
                   <td className="px-4 py-3 text-slate-500">
                     {agent.last_heartbeat ? formatRelativeTime(agent.last_heartbeat) : "Never"}
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => handleRemove(agent.agent_id, displayName)}
+                      className="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors"
+                    >
+                      Remove
+                    </button>
                   </td>
                 </tr>
               );
