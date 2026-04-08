@@ -65,6 +65,12 @@ async def get_user_by_token(db: AsyncSession, token: str) -> User | None:
     return result.scalar_one_or_none()
 
 
+async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
+    """Get a user by email address."""
+    result = await db.execute(select(User).where(User.email == email))
+    return result.scalar_one_or_none()
+
+
 async def list_users(db: AsyncSession) -> list[User]:
     """List all users."""
     result = await db.execute(select(User))
