@@ -1,5 +1,12 @@
 # Production deployment using pre-built images from GHCR
 # No build required - just set your .env and run: docker compose -f docker-compose.deploy.yml up -d
+#
+# PORTS EXPOSED:
+#   :3000 - Dashboard (web UI for humans)
+#   :8000 - API + MCP endpoint (for agents and programmatic access)
+#
+# The MCP endpoint is available at http://your-host:8000/mcp
+# Agents connect directly to port 8000, not through the dashboard proxy.
 
 services:
   api:
