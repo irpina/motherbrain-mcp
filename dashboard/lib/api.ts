@@ -1,4 +1,5 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// Use Next.js rewrite proxy to avoid CORS - browser calls /api-proxy/*, Next.js server proxies to API
+const BASE_URL = "/api-proxy";
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "supersecret";
 
 function headers(extra?: Record<string, string>) {

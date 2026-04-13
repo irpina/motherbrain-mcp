@@ -11,10 +11,8 @@ RUN npm ci
 FROM base AS builder
 WORKDIR /app
 
-# Build-time environment variables (baked into the bundle)
-ARG NEXT_PUBLIC_API_URL
+# Only NEXT_PUBLIC_API_KEY is needed at build time (for client-side usage)
 ARG NEXT_PUBLIC_API_KEY
-ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_PUBLIC_API_KEY=${NEXT_PUBLIC_API_KEY}
 
 COPY --from=deps /app/node_modules ./node_modules
