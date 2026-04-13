@@ -131,6 +131,7 @@ async def list_spawnable(
     agent_types = [
         {"type": "claude", "name": "Claude Code", "description": "Anthropic Claude CLI agent"},
         {"type": "codex", "name": "OpenAI Codex", "description": "OpenAI Codex CLI agent"},
+        {"type": "kimi", "name": "Kimi Code", "description": "Moonshot AI Kimi agent"},
     ]
     
     # Get running counts
@@ -192,6 +193,9 @@ async def spawn_agent(
         elif agent_type == "codex":
             image = "motherbrain-agent-codex:latest"
             env_key = "OPENAI_API_KEY"
+        elif agent_type == "kimi":
+            image = "motherbrain-agent-kimi:latest"
+            env_key = "MOONSHOT_API_KEY"
         else:
             raise HTTPException(status_code=400, detail=f"Unknown agent type: {agent_type}")
         

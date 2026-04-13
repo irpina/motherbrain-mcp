@@ -117,6 +117,7 @@ export default function SettingsPage() {
   const agentTypes = [
     { type: "claude", name: "Claude Code (Anthropic)" },
     { type: "codex", name: "OpenAI Codex" },
+    { type: "kimi", name: "Kimi Code (Moonshot AI)" },
   ];
 
   if (isLoading) {
