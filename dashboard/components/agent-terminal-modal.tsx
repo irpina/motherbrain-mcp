@@ -74,8 +74,10 @@ export function AgentTerminalModal({
         terminal.open(terminalRef.current);
         fitAddon.fit();
 
-        // Connect WebSocket
-        const wsUrl = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/api-proxy/agents/spawned/${agentId}/terminal-ws?token=${token}`;
+        // Connect WebSocket (direct to API port, not through proxy)
+        const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
+        const wsHost = window.location.hostname;
+        const wsUrl = `${wsProto}//${wsHost}:8000/agents/spawned/${agentId}/terminal-ws?token=${token}`;
         const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
 
