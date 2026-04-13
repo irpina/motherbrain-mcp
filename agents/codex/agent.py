@@ -10,7 +10,6 @@ import os
 import sys
 import json
 import asyncio
-import httpx
 from datetime import datetime
 from openai import OpenAI
 
@@ -33,12 +32,54 @@ class MotherbrainAgent:
         self.message_history = []
         
     async def call_mcp_tool(self, tool_name: str, arguments: dict) -> dict:
-        """Call an MCP tool on the Motherbrain server."""
+        """Call an MCP tool on the Motherbrain server using httpx with proper handshake."""
+        import httpx
+        
         async with httpx.AsyncClient() as client:
-            # MCP JSON-RPC request
-            payload = {
+            # Step 1: Initialize handshake
+            init_payload = {
                 "jsonrpc": "2.0",
-                "id": "1",
+                "id": "init-1",
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-03-26",
+                    "capabilities": {},
+                    "clientInfo": {"name": self.name, "version": "1.0"}
+                }
+            }
+            
+            init_resp = await client.post(
+                self.mcp_server,
+                json=init_payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-API-Key": self.mcp_api_key,
+                    "Accept": "application/json, text/event-stream"
+                },
+                timeout=10.0
+            )
+            
+            session_id = init_resp.headers.get("mcp-session-id")
+            headers = {
+                "Content-Type": "application/json",
+                "X-API-Key": self.mcp_api_key,
+                "Accept": "application/json, text/event-stream"
+            }
+            if session_id:
+                headers["mcp-session-id"] = session_id
+            
+            # Step 2: Send initialized notification
+            await client.post(
+                self.mcp_server,
+                json={"jsonrpc": "2.0", "method": "notifications/initialized"},
+                headers=headers,
+                timeout=5.0
+            )
+            
+            # Step 3: Call the tool
+            tool_payload = {
+                "jsonrpc": "2.0",
+                "id": "tool-1",
                 "method": "tools/call",
                 "params": {
                     "name": tool_name,
@@ -48,12 +89,8 @@ class MotherbrainAgent:
             
             response = await client.post(
                 self.mcp_server,
-                json=payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "X-API-Key": self.mcp_api_key,
-                    "Accept": "application/json, text/event-stream"
-                },
+                json=tool_payload,
+                headers=headers,
                 timeout=30.0
             )
             
@@ -64,7 +101,6 @@ class MotherbrainAgent:
             # Parse response (might be SSE or JSON)
             content_type = response.headers.get("content-type", "")
             if "text/event-stream" in content_type:
-                # Parse SSE
                 for line in response.text.splitlines():
                     if line.startswith("data:"):
                         data = json.loads(line[5:].strip())
