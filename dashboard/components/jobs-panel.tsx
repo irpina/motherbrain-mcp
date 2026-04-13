@@ -70,8 +70,8 @@ function JobCard({ job }: { job: Job }) {
       const res = await api.forceJobStatus(job.job_id, "completed");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
-    } catch (err) {
-      alert(`Failed to close job: ${err}`);
+    } catch (err: unknown) {
+      alert(`Failed to close job: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 

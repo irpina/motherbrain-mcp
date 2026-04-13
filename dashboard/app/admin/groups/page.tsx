@@ -51,8 +51,8 @@ export default function GroupsAdminPage() {
       setNewGroupDescription("");
       setShowNewGroupForm(false);
       queryClient.invalidateQueries({ queryKey: ["admin", "groups"] });
-    } catch (err) {
-      alert(`Failed to create group: ${err}`);
+    } catch (err: unknown) {
+      alert(`Failed to create group: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -62,8 +62,8 @@ export default function GroupsAdminPage() {
       const res = await api.deleteGroup(groupId);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       queryClient.invalidateQueries({ queryKey: ["admin", "groups"] });
-    } catch (err) {
-      alert(`Failed to delete group: ${err}`);
+    } catch (err: unknown) {
+      alert(`Failed to delete group: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -80,8 +80,8 @@ export default function GroupsAdminPage() {
       });
       setEditingGroup(null);
       queryClient.invalidateQueries({ queryKey: ["admin", "groups"] });
-    } catch (err) {
-      alert(`Failed to update permissions: ${err}`);
+    } catch (err: unknown) {
+      alert(`Failed to update permissions: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 

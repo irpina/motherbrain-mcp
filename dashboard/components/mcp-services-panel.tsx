@@ -27,8 +27,8 @@ export function MCPServicesPanel() {
     try {
       await api.sendMCPHeartbeat(serviceId);
       queryClient.invalidateQueries({ queryKey: ["mcp-services"] });
-    } catch (err) {
-      alert(`Failed to send heartbeat: ${err}`);
+    } catch (err: unknown) {
+      alert(`Failed to send heartbeat: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
