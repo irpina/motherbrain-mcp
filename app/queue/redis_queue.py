@@ -6,6 +6,9 @@ from app.core.config import settings
 
 client = redis.from_url(settings.REDIS_URL)
 
+# Export redis for direct access (pub/sub, etc.)
+redis_async = client
+
 
 async def enqueue_job(job_id: str):
     """Add a job ID to the queue."""
@@ -54,3 +57,15 @@ async def get_key(key: str) -> str | None:
     """
     result = await client.get(key)
     return result.decode() if result else None
+
+
+async def keys(pattern: str) -> list[bytes]:
+    """Get all keys matching a pattern.
+    
+    Args:
+        pattern: Redis key pattern (e.g., "chat_presence:general:*")
+    
+    Returns:
+        List of matching keys as bytes.
+    """
+    return await client.keys(pattern)
