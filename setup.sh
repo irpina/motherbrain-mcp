@@ -18,6 +18,9 @@ fi
 
 echo "✅ Docker and Docker Compose found"
 
+# Track if we need to rebuild
+needs_rebuild=false
+
 # Create .env if it doesn't exist
 if [ ! -f .env ]; then
     echo ""
@@ -34,8 +37,9 @@ if [ ! -f .env ]; then
         sed -i.bak "s/NEXT_PUBLIC_API_KEY=supersecret/NEXT_PUBLIC_API_KEY=$api_key/" .env
         rm -f .env.bak
         echo "✅ API key updated"
+        needs_rebuild=true
     else
-        echo "Using default API key (change this in production!)"
+        echo "Using default API key"
     fi
 else
     echo "✅ .env already exists, skipping creation"
@@ -44,8 +48,17 @@ fi
 echo ""
 echo "=== Setup complete! ==="
 echo ""
-echo "To start the stack, run:"
-echo "  docker compose up -d"
+
+if [ "$needs_rebuild" = true ]; then
+    echo "⚠️  Custom API key detected. The dashboard needs to be rebuilt to bake in the new key."
+    echo ""
+    echo "To start the stack, run:"
+    echo "  docker compose up -d --build"
+else
+    echo "To start the stack, run:"
+    echo "  docker compose up -d"
+fi
+
 echo ""
 echo "Then open:"
 echo "  Dashboard: http://localhost:3000"
