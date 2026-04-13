@@ -2,14 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: 'standalone',
-  async rewrites() {
-    return [
-      {
-        source: '/api-proxy/:path*',
-        destination: 'http://api:8000/:path*',
-      },
-    ];
-  },
+  skipTrailingSlashRedirect: true,
 };
 
 export default nextConfig;

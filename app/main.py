@@ -43,7 +43,8 @@ app = FastAPI(
     title="Motherbrain MCP",
     description="Control plane for agent orchestration",
     version="0.2.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    redirect_slashes=False
 )
 
 # MCP Auth middleware (extracts user tokens from headers)

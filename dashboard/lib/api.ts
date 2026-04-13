@@ -86,7 +86,7 @@ export const api = {
     request<any>(`/mcp/heartbeat/${serviceId}`, { method: "POST" }),
 
   // Agents
-  listAgents: () => request<any[]>("/agents"),
+  listAgents: () => request<any[]>("/agents/"),
   deleteAgent: (agentId: string) =>
     fetch(`${BASE_URL}/agents/${agentId}`, { method: "DELETE", headers: headers() }),
 
@@ -96,7 +96,7 @@ export const api = {
     if (params?.status) q.set("status", params.status);
     if (params?.limit) q.set("limit", String(params.limit));
     const qs = q.toString();
-    return request<Job[]>(`/jobs${qs ? "?" + qs : ""}`);
+    return request<Job[]>(`/jobs/${qs ? "?" + qs : ""}`);
   },
   createJob: (body: { type: string; payload?: unknown; requirements?: unknown; priority?: string | number; assigned_agent?: string | null; created_by?: string; context_job_ids?: string[]; skill_key?: string | null }) =>
     request<Job>("/jobs", { method: "POST", body: JSON.stringify(body) }),
@@ -115,7 +115,7 @@ export const api = {
   },
 
   // Context
-  listContext: () => request<ProjectContext[]>("/context"),
+  listContext: () => request<ProjectContext[]>("/context/"),
   setContext: (key: string, body: { value: unknown; updated_by: string; description?: string; service_id?: string; category?: string }) =>
     request<ProjectContext>(`/context/${encodeURIComponent(key)}`, {
       method: "POST",
@@ -128,5 +128,5 @@ export const api = {
   getSystemState: () => request<any>("/system/state"),
 
   // Main dashboard stats
-  listAgentsForStats: () => request<any[]>("/agents"),
+  listAgentsForStats: () => request<any[]>("/agents/"),
 };
