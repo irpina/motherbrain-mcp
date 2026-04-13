@@ -1172,8 +1172,8 @@ async def chat_send(
     sender: str,
     message: str,
     channel: str,
+    ctx: Context,
     reply_to: int = 0,
-    ctx: Context
 ) -> str:
     """Send a message to a chat channel.
     
@@ -1219,9 +1219,9 @@ async def chat_send(
 async def chat_read(
     sender: str,
     channel: str,
+    ctx: Context,
     limit: int = 50,
     since_id: int = 0,
-    ctx: Context
 ) -> str:
     """Read messages from a chat channel.
     
