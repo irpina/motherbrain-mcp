@@ -129,4 +129,40 @@ export const api = {
 
   // Main dashboard stats
   listAgentsForStats: () => request<any[]>("/agents/"),
+
+  // Chat
+  listChannels: () => request<any[]>("/chat/channels/"),
+  createChannel: (name: string) =>
+    request<any>(`/chat/channels/?name=${encodeURIComponent(name)}`, { method: "POST" }),
+  getChannelMessages: (channelName: string, limit?: number, beforeId?: number) => {
+    const params = new URLSearchParams();
+    if (limit) params.set("limit", String(limit));
+    if (beforeId) params.set("before_id", String(beforeId));
+    const qs = params.toString();
+    return request<{messages: any[]; channel: string}>(`/chat/channels/${encodeURIComponent(channelName)}/messages/${qs ? "?" + qs : ""}`);
+  },
+  postMessage: (channelName: string, sender: string, text: string, msgType?: string, replyTo?: number) =>
+    request<any>(`/chat/channels/${encodeURIComponent(channelName)}/messages/`, {
+      method: "POST",
+      body: JSON.stringify({ sender, text, msg_type: msgType || "chat", reply_to: replyTo }),
+    }),
+
+  // Agent Spawn
+  listAgentCredentials: () => request<any[]>("/agents/credentials/"),
+  storeAgentCredential: (agentType: string, apiKey: string) =>
+    request<any>("/agents/credentials/", {
+      method: "POST",
+      body: JSON.stringify({ agent_type: agentType, api_key: apiKey }),
+    }),
+  deleteAgentCredential: (agentType: string) =>
+    fetch(`${BASE_URL}/agents/credentials/${agentType}`, { method: "DELETE", headers: headers() }),
+  listSpawnableAgents: () => request<any[]>("/agents/spawnable/"),
+  listSpawnedAgents: () => request<any[]>("/agents/spawned/"),
+  spawnAgent: (agentType: string, channel: string, task?: string) =>
+    request<any>("/agents/spawn/", {
+      method: "POST",
+      body: JSON.stringify({ agent_type: agentType, channel, task }),
+    }),
+  killSpawnedAgent: (agentId: string) =>
+    fetch(`${BASE_URL}/agents/spawned/${agentId}/`, { method: "DELETE", headers: headers() }),
 };

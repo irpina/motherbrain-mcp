@@ -12,6 +12,7 @@ import {
   Server,
   Shield,
   UserCog,
+  MessageSquare,
 } from "lucide-react";
 
 const navItems = [
@@ -21,6 +22,7 @@ const navItems = [
   { href: "/mcp", label: "MCP Services", icon: Server },
   { href: "/context", label: "Context", icon: Database },
   { href: "/activity", label: "Activity", icon: Activity },
+  { href: "/chat", label: "Chat", icon: MessageSquare },
 ];
 
 const adminItems = [
