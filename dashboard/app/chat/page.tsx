@@ -66,29 +66,44 @@ export default function ChatPage() {
     });
   }, [selectedChannel]);
 
-  // WebSocket connection
+  // WebSocket connection (token-exchange pattern)
+  // Route handlers cannot proxy WS upgrades (fetch() does not handle protocol
+  // upgrades). Instead: fetch a short-lived token via the proxy (validates API
+  // key server-side), then connect the WebSocket directly to port 8000.
   useEffect(() => {
     if (!selectedChannel) return;
 
-    const wsUrl = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/api-proxy/ws/channels/${selectedChannel}`;
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
+    let ws: WebSocket | null = null;
+    let cancelled = false;
 
-    ws.onopen = () => {
-      setWsConnected(true);
-    };
+    (async () => {
+      try {
+        const res = await fetch(`/api-proxy/chat/ws-token/`, { method: "POST" });
+        if (!res.ok || cancelled) return;
+        const { token } = await res.json();
 
-    ws.onclose = () => {
-      setWsConnected(false);
-    };
+        const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
+        const wsHost = window.location.hostname;
+        const wsUrl = `${wsProto}//${wsHost}:8000/chat/ws/channels/${selectedChannel}?token=${token}`;
+        ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
 
-    ws.onmessage = (event) => {
-      const msg = JSON.parse(event.data);
-      setMessages((prev) => [...prev, msg]);
-    };
+        ws.onopen = () => { if (!cancelled) setWsConnected(true); };
+        ws.onclose = () => { if (!cancelled) setWsConnected(false); };
+        ws.onerror = () => { if (!cancelled) setWsConnected(false); };
+        ws.onmessage = (event) => {
+          if (cancelled) return;
+          const msg = JSON.parse(event.data);
+          setMessages((prev) => [...prev, msg]);
+        };
+      } catch {
+        if (!cancelled) setWsConnected(false);
+      }
+    })();
 
     return () => {
-      ws.close();
+      cancelled = true;
+      ws?.close();
     };
   }, [selectedChannel]);
 

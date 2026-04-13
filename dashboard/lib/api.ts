@@ -141,11 +141,11 @@ export const api = {
     const qs = params.toString();
     return request<{messages: any[]; channel: string}>(`/chat/channels/${encodeURIComponent(channelName)}/messages/${qs ? "?" + qs : ""}`);
   },
-  postMessage: (channelName: string, sender: string, text: string, msgType?: string, replyTo?: number) =>
-    request<any>(`/chat/channels/${encodeURIComponent(channelName)}/messages/`, {
-      method: "POST",
-      body: JSON.stringify({ sender, text, msg_type: msgType || "chat", reply_to: replyTo }),
-    }),
+  postMessage: (channelName: string, sender: string, text: string, msgType?: string, replyTo?: number) => {
+    const q = new URLSearchParams({ sender, text, msg_type: msgType || "chat" });
+    if (replyTo) q.set("reply_to", String(replyTo));
+    return request<any>(`/chat/channels/${encodeURIComponent(channelName)}/messages/?${q}`, { method: "POST" });
+  },
 
   // Agent Spawn
   listAgentCredentials: () => request<any[]>("/agents/credentials/"),

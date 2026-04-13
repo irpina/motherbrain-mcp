@@ -14,7 +14,7 @@ from app.api.deps import require_admin_user, get_current_agent
 from app.db.session import get_db
 from app.models.channel import Channel
 from app.models.chat_message import ChatMessage
-from app.queue.redis_queue import redis_async
+from app.queue.redis_queue import redis_async, set_key, get_key, delete_key
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -155,29 +155,53 @@ async def _save_and_broadcast_message(
     return msg_data
 
 
+# ── WebSocket Auth Token ─────────────────────────────────────────────────────
+
+@router.post("/ws-token/")
+async def create_ws_token(
+    _: str = Depends(require_admin_user)
+):
+    """Issue a short-lived WebSocket auth token (60s, single-use).
+
+    Browser fetches this via the HTTPS proxy, then connects the WebSocket
+    directly to port 8000 using the token as a query param.
+    """
+    import secrets
+    token = secrets.token_hex(16)
+    await set_key(f"ws_token:{token}", "1", ttl=60)
+    return {"token": token, "expires_in": 60}
+
+
 # ── WebSocket Real-time ──────────────────────────────────────────────────────
 
 @router.websocket("/ws/channels/{channel_name}")
 async def chat_websocket(
     websocket: WebSocket,
     channel_name: str,
-    api_key: str | None = None
+    token: str | None = None
 ):
-    """WebSocket endpoint for real-time chat.
-    
-    Clients connect with: ws://host/chat/ws/channels/{name}?api_key=...
+    """Real-time chat via WebSocket.
+
+    Connect to: ws://host:8000/chat/ws/channels/{name}?token=<ws_token>
+    Obtain token via POST /chat/ws-token/ (requires X-API-Key header).
+    Token is single-use and expires in 60 seconds.
     """
-    # TODO: Validate API key here
-    # For now, accept all connections (auth middleware should handle this)
-    
+    if not token:
+        await websocket.close(code=4001, reason="Missing token")
+        return
+    key = f"ws_token:{token}"
+    valid = await get_key(key)
+    if not valid:
+        await websocket.close(code=4001, reason="Invalid or expired token")
+        return
+    await delete_key(key)  # single-use
+
     await websocket.accept()
-    
-    # Subscribe to Redis channel
+
     pubsub = redis_async.pubsub()
     await pubsub.subscribe(f"chat:{channel_name}")
-    
+
     try:
-        # Listen for messages from Redis and forward to WebSocket
         async for message in pubsub.listen():
             if message["type"] == "message":
                 data = json.loads(message["data"])

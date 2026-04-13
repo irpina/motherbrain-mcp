@@ -112,7 +112,7 @@ export default function SettingsPage() {
   const queryClient = useQueryClient();
 
   const hasCred = (type: string) =>
-    credentials?.some((c: any) => c.agent_type === type);
+    credentials?.some((c: any) => c.agent_type === type) ?? false;
 
   const agentTypes = [
     { type: "claude", name: "Claude Code (Anthropic)" },

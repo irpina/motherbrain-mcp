@@ -69,3 +69,7 @@ async def keys(pattern: str) -> list[bytes]:
         List of matching keys as bytes.
     """
     return await client.keys(pattern)
+
+async def delete_key(key: str):
+    """Delete a key from Redis."""
+    await client.delete(key)
