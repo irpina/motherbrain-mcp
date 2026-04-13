@@ -1128,3 +1128,197 @@ async def set_context(
         return json.dumps(result, indent=2)
     finally:
         await db.close()
+
+
+# ── Chat Tools ───────────────────────────────────────────────────────────────
+# These tools provide agents with chat capabilities integrated into Motherbrain.
+# They replace the external agentchattr-mcp service.
+
+@mcp.tool()
+async def chat_join(sender: str, channel: str, ctx: Context) -> str:
+    """Join a chat channel and announce your presence.
+    
+    Call this when you first connect to a channel to let others know you're here.
+    This posts a system join message to the channel.
+    
+    Args:
+        sender: Your agent name (e.g., "claude", "kimi")
+        channel: The channel name to join (e.g., "general", "motherbrain")
+    
+    Returns:
+        Confirmation that you joined the channel.
+    """
+    db = await _get_db()
+    try:
+        from app.api.routes.chat import _save_and_broadcast_message
+        
+        # Post join message
+        result = await _save_and_broadcast_message(
+            db, channel, "system", f"{sender} joined the channel", "join"
+        )
+        
+        # Update presence in Redis
+        await redis_queue.set_key(f"chat_presence:{channel}:{sender}", "1", ttl=30)
+        
+        return json.dumps({"status": "joined", "channel": channel, "sender": sender})
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+    finally:
+        await db.close()
+
+
+@mcp.tool()
+async def chat_send(
+    sender: str,
+    message: str,
+    channel: str,
+    reply_to: int = 0,
+    ctx: Context
+) -> str:
+    """Send a message to a chat channel.
+    
+    This is how you communicate with humans and other agents in real-time.
+    Messages are persisted and broadcast to all connected clients.
+    
+    Args:
+        sender: Your agent name
+        message: The message text to send
+        channel: The channel name (e.g., "general", "motherbrain")
+        reply_to: Optional message ID this is a reply to
+    
+    Returns:
+        Confirmation with the message ID.
+    
+    Example:
+        chat_send("claude", "I'll analyze that file now", "general")
+    """
+    db = await _get_db()
+    try:
+        from app.api.routes.chat import _save_and_broadcast_message
+        
+        reply_id = reply_to if reply_to > 0 else None
+        result = await _save_and_broadcast_message(
+            db, channel, sender, message, "chat", reply_id
+        )
+        
+        # Update presence
+        await redis_queue.set_key(f"chat_presence:{channel}:{sender}", "1", ttl=30)
+        
+        return json.dumps({
+            "status": "sent",
+            "message_id": result["id"],
+            "channel": channel
+        })
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+    finally:
+        await db.close()
+
+
+@mcp.tool()
+async def chat_read(
+    sender: str,
+    channel: str,
+    limit: int = 50,
+    since_id: int = 0,
+    ctx: Context
+) -> str:
+    """Read messages from a chat channel.
+    
+    Use this to check for new messages addressed to you or to catch up
+    on conversation history. The since_id parameter lets you poll efficiently
+    — only get messages newer than your last read.
+    
+    Args:
+        sender: Your agent name (used for cursor tracking)
+        channel: The channel to read from
+        limit: Maximum messages to return (default 50, max 100)
+        since_id: Only return messages with ID > this (for polling)
+    
+    Returns:
+        JSON with messages array and your new cursor position.
+    
+    Example:
+        chat_read("claude", "general", since_id=42) → messages newer than #42
+    """
+    db = await _get_db()
+    try:
+        from sqlalchemy import select, desc
+        from app.models.channel import Channel
+        from app.models.chat_message import ChatMessage
+        
+        # Get channel
+        result = await db.execute(select(Channel).where(Channel.name == channel))
+        ch = result.scalar_one_or_none()
+        if not ch:
+            return json.dumps({"error": f"Channel '{channel}' not found"})
+        
+        # Build query
+        query = select(ChatMessage).where(ChatMessage.channel_id == ch.id)
+        if since_id > 0:
+            query = query.where(ChatMessage.id > since_id)
+        query = query.order_by(desc(ChatMessage.id)).limit(min(limit, 100))
+        
+        result = await db.execute(query)
+        messages = result.scalars().all()
+        
+        # Get cursor for next read
+        new_cursor = max((m.id for m in messages), default=since_id)
+        
+        # Update presence
+        await redis_queue.set_key(f"chat_presence:{channel}:{sender}", "1", ttl=30)
+        
+        return json.dumps({
+            "channel": channel,
+            "messages": [
+                {
+                    "id": m.id,
+                    "sender": m.sender,
+                    "text": m.text,
+                    "type": m.type,
+                    "reply_to": m.reply_to,
+                    "created_at": m.created_at.isoformat()
+                }
+                for m in reversed(messages)  # Oldest first
+            ],
+            "cursor": new_cursor,
+            "count": len(messages)
+        }, indent=2)
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+    finally:
+        await db.close()
+
+
+@mcp.tool()
+async def chat_who(channel: str, ctx: Context) -> str:
+    """List agents currently active in a channel.
+    
+    Returns agents who have been active in the last 30 seconds.
+    Use this to see who's available to collaborate.
+    
+    Args:
+        channel: The channel to check
+    
+    Returns:
+        JSON array of active agent names.
+    """
+    try:
+        # Scan for presence keys
+        pattern = f"chat_presence:{channel}:*"
+        keys = await redis_queue.redis.keys(pattern)
+        
+        agents = []
+        for key in keys:
+            # Extract sender name from key
+            parts = key.decode().split(":")
+            if len(parts) >= 3:
+                agents.append(parts[2])
+        
+        return json.dumps({
+            "channel": channel,
+            "agents": sorted(agents),
+            "count": len(agents)
+        }, indent=2)
+    except Exception as e:
+        return json.dumps({"error": str(e)})
