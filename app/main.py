@@ -1,4 +1,5 @@
 import asyncio
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -50,9 +51,14 @@ app = FastAPI(
 app.add_middleware(MCPAuthMiddleware)
 
 # CORS middleware for dashboard
+# Configure allowed origins via CORS_ORIGINS env var (comma-separated)
+# Example: CORS_ORIGINS=http://localhost:3000,http://motherbrain.local:3000
+_cors_env = os.getenv("CORS_ORIGINS", "http://localhost:3000")
+_cors_origins = [o.strip() for o in _cors_env.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=_cors_origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )

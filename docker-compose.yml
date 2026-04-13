@@ -44,11 +44,14 @@ services:
     build:
       context: ./dashboard
       dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        - NEXT_PUBLIC_API_KEY=${NEXT_PUBLIC_API_KEY:-supersecret}
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
-      - NEXT_PUBLIC_API_KEY=supersecret
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      - NEXT_PUBLIC_API_KEY=${NEXT_PUBLIC_API_KEY:-supersecret}
     depends_on:
       - api
     restart: unless-stopped
