@@ -13,6 +13,7 @@ import {
   Shield,
   UserCog,
   MessageSquare,
+  Settings,
 } from "lucide-react";
 
 const navItems = [
@@ -28,6 +29,7 @@ const navItems = [
 const adminItems = [
   { href: "/admin/users", label: "Users", icon: UserCog },
   { href: "/admin/groups", label: "Groups", icon: Shield },
+  { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
 
 export function Nav() {
