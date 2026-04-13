@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.middleware.mcp_auth import MCPAuthMiddleware
 from app.db.init_db import init_db
-from app.api.routes import agents, jobs, context, messages, actions, mcp, system, events, heartbeat, event_log_routes, admin, chat, agent_spawn
+from app.api.routes import agents, jobs, context, messages, actions, mcp, system, events, heartbeat, event_log_routes, admin, chat, agent_spawn, agent_terminal
 from app.background.heartbeat import start_heartbeat_checker
 from app.background.health_check import start_health_checker
 from app.mcp_server import mcp as mcp_server
@@ -78,6 +78,7 @@ app.include_router(event_log_routes.router)
 app.include_router(admin.router)
 app.include_router(chat.router)
 app.include_router(agent_spawn.router)
+app.include_router(agent_terminal.router)
 
 # Mount MCP server at /mcp (shares FastAPI event loop)
 app.mount("/mcp", get_mcp_app())

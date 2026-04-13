@@ -165,4 +165,8 @@ export const api = {
     }),
   killSpawnedAgent: (agentId: string) =>
     fetch(`${BASE_URL}/agents/spawned/${agentId}/`, { method: "DELETE", headers: headers() }),
+
+  // Agent Terminal
+  createTerminalToken: (agentId: string) =>
+    request<{token: string; expires_in: number; container_id: string}>(`/agents/spawned/${agentId}/terminal-token/`, { method: "POST" }),
 };

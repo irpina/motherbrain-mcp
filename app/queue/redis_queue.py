@@ -70,6 +70,19 @@ async def keys(pattern: str) -> list[bytes]:
     """
     return await client.keys(pattern)
 
+
+async def delete_key(key: str) -> bool:
+    """Delete a key from Redis.
+    
+    Args:
+        key: The Redis key to delete
+    
+    Returns:
+        True if key was deleted, False if it didn't exist
+    """
+    result = await client.delete(key)
+    return result > 0
+
 async def delete_key(key: str):
     """Delete a key from Redis."""
     await client.delete(key)
