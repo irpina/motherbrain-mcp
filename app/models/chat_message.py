@@ -28,4 +28,5 @@ class ChatMessage(Base):
     text: Mapped[str] = mapped_column(Text)
     type: Mapped[str] = mapped_column(String, default="chat")  # chat, system, join, leave
     reply_to: Mapped[int | None] = mapped_column(Integer, ForeignKey("chat_messages.id"), nullable=True)
+    hop: Mapped[int] = mapped_column(Integer, default=0)  # Loop guard hop count
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

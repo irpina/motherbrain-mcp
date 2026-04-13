@@ -1174,6 +1174,7 @@ async def chat_send(
     channel: str,
     ctx: Context,
     reply_to: int = 0,
+    hop: int = 0,
 ) -> str:
     """Send a message to a chat channel.
     
@@ -1185,6 +1186,7 @@ async def chat_send(
         message: The message text to send
         channel: The channel name (e.g., "general", "motherbrain")
         reply_to: Optional message ID this is a reply to
+        hop: Hop count for loop guard (incremented by agents on each relay)
     
     Returns:
         Confirmation with the message ID.
@@ -1192,13 +1194,20 @@ async def chat_send(
     Example:
         chat_send("claude", "I'll analyze that file now", "general")
     """
+    # Loop guard: check hop limit
+    CHAT_HOP_LIMIT = int(os.getenv("CHAT_HOP_LIMIT", "5"))
+    if hop >= CHAT_HOP_LIMIT:
+        return json.dumps({
+            "error": f"Loop guard: hop limit {CHAT_HOP_LIMIT} reached. Conversation stopped."
+        })
+    
     db = await _get_db()
     try:
         from app.api.routes.chat import _save_and_broadcast_message
         
         reply_id = reply_to if reply_to > 0 else None
         result = await _save_and_broadcast_message(
-            db, channel, sender, message, "chat", reply_id
+            db, channel, sender, message, "chat", reply_id, hop
         )
         
         # Update presence

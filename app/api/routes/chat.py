@@ -119,7 +119,8 @@ async def _save_and_broadcast_message(
     sender: str,
     text: str,
     msg_type: str = "chat",
-    reply_to: int | None = None
+    reply_to: int | None = None,
+    hop: int = 0
 ) -> dict:
     """Save message to DB and broadcast via Redis."""
     # Get channel
@@ -134,7 +135,8 @@ async def _save_and_broadcast_message(
         sender=sender,
         text=text,
         type=msg_type,
-        reply_to=reply_to
+        reply_to=reply_to,
+        hop=hop
     )
     db.add(message)
     await db.commit()
@@ -147,6 +149,7 @@ async def _save_and_broadcast_message(
         "text": message.text,
         "type": message.type,
         "reply_to": message.reply_to,
+        "hop": hop,
         "created_at": message.created_at.isoformat(),
         "channel": channel_name
     }
