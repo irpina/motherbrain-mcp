@@ -1,17 +1,21 @@
+# Production deployment using pre-built images from GHCR
+# No build required - just set your .env and run: docker compose -f docker-compose.deploy.yml up -d
+
 services:
   api:
-    build: .
+    image: ghcr.io/irpina/motherbrain-mcp/api:latest
     ports:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/motherbrain
+      - REDIS_URL=redis://redis:6379
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_started
-    volumes:
-      - ./app:/app/app
     restart: unless-stopped
 
   db:
@@ -40,9 +44,7 @@ services:
     restart: unless-stopped
 
   dashboard:
-    build:
-      context: ./dashboard
-      dockerfile: Dockerfile
+    image: ghcr.io/irpina/motherbrain-mcp/dashboard:latest
     ports:
       - "3000:3000"
     env_file:

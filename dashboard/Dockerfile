@@ -11,10 +11,6 @@ RUN npm ci
 FROM base AS builder
 WORKDIR /app
 
-# Only NEXT_PUBLIC_API_KEY is needed at build time (for client-side usage)
-ARG NEXT_PUBLIC_API_KEY
-ENV NEXT_PUBLIC_API_KEY=${NEXT_PUBLIC_API_KEY}
-
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1

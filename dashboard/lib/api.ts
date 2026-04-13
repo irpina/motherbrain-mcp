@@ -1,9 +1,9 @@
-// Use Next.js rewrite proxy to avoid CORS - browser calls /api-proxy/*, Next.js server proxies to API
+// Use Next.js proxy to avoid CORS - browser calls /api-proxy/*, Next.js server proxies to API
+// The API key is injected server-side by the route handler (app/api-proxy/[...path]/route.ts)
 const BASE_URL = "/api-proxy";
-const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "supersecret";
 
 function headers(extra?: Record<string, string>) {
-  return { "Content-Type": "application/json", "X-API-Key": API_KEY, ...extra };
+  return { "Content-Type": "application/json", ...extra };
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

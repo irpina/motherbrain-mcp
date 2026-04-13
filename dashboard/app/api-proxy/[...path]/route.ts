@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 const API_URL = process.env.API_INTERNAL_URL ?? "http://api:8000";
+const API_KEY = process.env.API_KEY ?? "supersecret";
 
 async function proxy(
   request: NextRequest,
@@ -15,6 +16,9 @@ async function proxy(
 
   const headers = new Headers(request.headers);
   headers.delete("host");
+  
+  // Inject API key - server-side only, browser never sees this
+  headers.set("X-API-Key", API_KEY);
 
   const body =
     request.method === "GET" || request.method === "HEAD"
