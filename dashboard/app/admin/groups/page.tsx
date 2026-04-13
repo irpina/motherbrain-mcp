@@ -228,7 +228,7 @@ export default function GroupsAdminPage() {
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
                       {group.allowed_service_ids?.length ? (
-                        group.allowed_service_ids.map((sid) => (
+                        group.allowed_service_ids.map((sid: string) => (
                           <span
                             key={sid}
                             className="px-2 py-0.5 bg-slate-100 rounded text-xs"

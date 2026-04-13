@@ -98,9 +98,9 @@ function JobCard({ job }: { job: Job }) {
         </div>
       )}
       
-      {job.depends_on.length > 0 && (
+      {(job.depends_on?.length ?? 0) > 0 && (
         <div className="text-xs text-slate-500">
-          Depends: {job.depends_on.map(truncateId).join(", ")}
+          Depends: {job.depends_on!.map(truncateId).join(", ")}
         </div>
       )}
       

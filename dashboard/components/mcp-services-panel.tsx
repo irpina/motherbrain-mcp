@@ -73,7 +73,7 @@ export function MCPServicesPanel() {
                 <td className="px-4 py-3 text-slate-500 text-xs font-mono">{service.endpoint}</td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-1">
-                    {service.capabilities.map((cap) => (
+                    {service.capabilities.map((cap: string) => (
                       <span key={cap} className="px-2 py-0.5 bg-slate-100 rounded text-xs">{cap}</span>
                     ))}
                   </div>
