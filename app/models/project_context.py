@@ -14,3 +14,5 @@ class ProjectContext(Base):
     last_updated: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_by: Mapped[str] = mapped_column(String)
     description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    service_id: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
+    category: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)

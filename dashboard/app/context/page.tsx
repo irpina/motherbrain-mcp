@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { api, type ProjectContext } from "@/lib/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatRelativeTime } from "@/lib/utils";
@@ -32,7 +32,7 @@ function SkillRow({ ctx, onEdit, onDelete }: {
 
   return (
     <tr className="hover:bg-slate-50">
-      <td className="px-4 py-3" colSpan={5}>
+      <td className="px-4 py-3" colSpan={7}>
         <div className="space-y-2">
           {/* Header row */}
           <div className="flex items-center gap-3 flex-wrap">
@@ -46,6 +46,17 @@ function SkillRow({ ctx, onEdit, onDelete }: {
             <span className="px-2 py-0.5 bg-slate-200 text-slate-700 rounded text-xs">
               {version}
             </span>
+            {/* RBAC indicators */}
+            {ctx.service_id && (
+              <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded text-xs" title="Restricted to users with permission on this service">
+                🔒 {ctx.service_id}
+              </span>
+            )}
+            {ctx.category && (
+              <span className="px-2 py-0.5 bg-purple-100 text-purple-800 rounded text-xs">
+                📁 {ctx.category}
+              </span>
+            )}
             <span className="text-xs text-slate-400 ml-auto">
               {ctx.updated_by} • {formatRelativeTime(ctx.last_updated)}
             </span>
@@ -74,19 +85,38 @@ function SkillRow({ ctx, onEdit, onDelete }: {
   );
 }
 
-function ContextRow({ ctx, editing, editValue, onEdit, onSave, onCancel, onDelete, onEditChange }: {
+function ContextRow({ ctx, editing, editValue, editServiceId, editCategory, onEdit, onSave, onCancel, onDelete, onEditChange, onServiceIdChange, onCategoryChange }: {
   ctx: ProjectContext;
   editing: boolean;
   editValue: string;
+  editServiceId: string;
+  editCategory: string;
   onEdit: () => void;
   onSave: () => void;
   onCancel: () => void;
   onDelete: () => void;
   onEditChange: (v: string) => void;
+  onServiceIdChange: (v: string) => void;
+  onCategoryChange: (v: string) => void;
 }) {
   return (
     <tr className="hover:bg-slate-50">
-      <td className="px-4 py-3 font-mono text-sm">{ctx.context_key}</td>
+      <td className="px-4 py-3 font-mono text-sm">
+        {ctx.context_key}
+        {/* RBAC indicators */}
+        <div className="flex gap-1 mt-1">
+          {ctx.service_id && (
+            <span className="px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded text-[10px]" title="Restricted to users with permission on this service">
+              🔒 {ctx.service_id}
+            </span>
+          )}
+          {ctx.category && (
+            <span className="px-1.5 py-0.5 bg-purple-100 text-purple-800 rounded text-[10px]">
+              📁 {ctx.category}
+            </span>
+          )}
+        </div>
+      </td>
       <td className="px-4 py-3">
         {editing ? (
           <textarea
@@ -107,9 +137,25 @@ function ContextRow({ ctx, editing, editValue, onEdit, onSave, onCancel, onDelet
       </td>
       <td className="px-4 py-3">
         {editing ? (
-          <div className="flex gap-2">
-            <button onClick={onSave} className="text-green-600 hover:underline text-xs">Save</button>
-            <button onClick={onCancel} className="text-slate-500 hover:underline text-xs">Cancel</button>
+          <div className="space-y-2">
+            <input
+              type="text"
+              value={editServiceId}
+              onChange={(e) => onServiceIdChange(e.target.value)}
+              placeholder="Service ID (optional)"
+              className="w-full px-2 py-1 border rounded text-xs"
+            />
+            <input
+              type="text"
+              value={editCategory}
+              onChange={(e) => onCategoryChange(e.target.value)}
+              placeholder="Category (optional)"
+              className="w-full px-2 py-1 border rounded text-xs"
+            />
+            <div className="flex gap-2">
+              <button onClick={onSave} className="text-green-600 hover:underline text-xs">Save</button>
+              <button onClick={onCancel} className="text-slate-500 hover:underline text-xs">Cancel</button>
+            </div>
           </div>
         ) : (
           <div className="flex gap-2">
@@ -126,11 +172,16 @@ export default function ContextPage() {
   const queryClient = useQueryClient();
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [editServiceId, setEditServiceId] = useState("");
+  const [editCategory, setEditCategory] = useState("");
   const [newKey, setNewKey] = useState("");
   const [newValue, setNewValue] = useState("{}");
   const [newDescription, setNewDescription] = useState("");
+  const [newServiceId, setNewServiceId] = useState("");
+  const [newCategory, setNewCategory] = useState("");
   const [isAdding, setIsAdding] = useState(false);
   const [showSkillsOnly, setShowSkillsOnly] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
 
   const { data: contexts, isLoading } = useQuery({
     queryKey: ["context"],
@@ -138,13 +189,37 @@ export default function ContextPage() {
     refetchInterval: 5000,
   });
 
-  const filteredContexts = showSkillsOnly
-    ? contexts?.filter(c => c.context_key.startsWith("skills."))
-    : contexts;
+  // Get unique categories for filter dropdown
+  const categories = useMemo(() => {
+    if (!contexts) return [];
+    const cats = new Set<string>();
+    contexts.forEach(c => {
+      if (c.category) cats.add(c.category);
+    });
+    return Array.from(cats).sort();
+  }, [contexts]);
+
+  const filteredContexts = useMemo(() => {
+    let result = contexts;
+    
+    // Skills filter
+    if (showSkillsOnly) {
+      result = result?.filter(c => c.context_key.startsWith("skills."));
+    }
+    
+    // Category filter
+    if (categoryFilter !== "all") {
+      result = result?.filter(c => c.category === categoryFilter);
+    }
+    
+    return result;
+  }, [contexts, showSkillsOnly, categoryFilter]);
 
   const handleEdit = (ctx: ProjectContext) => {
     setEditingKey(ctx.context_key);
     setEditValue(JSON.stringify(ctx.value, null, 2));
+    setEditServiceId(ctx.service_id || "");
+    setEditCategory(ctx.category || "");
   };
 
   const handleSave = async (key: string) => {
@@ -153,6 +228,8 @@ export default function ContextPage() {
       await api.setContext(key, {
         value: parsed,
         updated_by: "dashboard",
+        service_id: editServiceId || undefined,
+        category: editCategory || undefined,
       });
       queryClient.invalidateQueries({ queryKey: ["context"] });
       setEditingKey(null);
@@ -174,12 +251,16 @@ export default function ContextPage() {
         value: parsed,
         updated_by: "dashboard",
         description: newDescription || undefined,
+        service_id: newServiceId || undefined,
+        category: newCategory || undefined,
       });
       queryClient.invalidateQueries({ queryKey: ["context"] });
       setIsAdding(false);
       setNewKey("");
       setNewValue("{}");
       setNewDescription("");
+      setNewServiceId("");
+      setNewCategory("");
     } catch (e) {
       alert("Invalid JSON: " + (e as Error).message);
     }
@@ -192,9 +273,21 @@ export default function ContextPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Project Context</h1>
-          <p className="text-slate-500">Shared key-value store for agents</p>
+          <p className="text-slate-500">Shared key-value store for agents with RBAC</p>
         </div>
         <div className="flex items-center gap-3">
+          {/* Category filter */}
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="px-3 py-2 border rounded-md text-sm"
+          >
+            <option value="all">All Categories</option>
+            {categories.map(cat => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
+          
           {/* Skills filter toggle */}
           <button
             onClick={() => setShowSkillsOnly(!showSkillsOnly)}
@@ -246,6 +339,34 @@ export default function ContextPage() {
               className="w-full px-3 py-2 border rounded-md"
             />
           </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Service ID (optional)
+                <span className="text-slate-400 font-normal ml-1">— Restrict to users with permission</span>
+              </label>
+              <input
+                type="text"
+                value={newServiceId}
+                onChange={(e) => setNewServiceId(e.target.value)}
+                className="w-full px-3 py-2 border rounded-md"
+                placeholder="e.g., agentchattr-mcp"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Category (optional)
+                <span className="text-slate-400 font-normal ml-1">— For UI organization</span>
+              </label>
+              <input
+                type="text"
+                value={newCategory}
+                onChange={(e) => setNewCategory(e.target.value)}
+                className="w-full px-3 py-2 border rounded-md"
+                placeholder="e.g., devops, onboarding"
+              />
+            </div>
+          </div>
           <div className="flex gap-2">
             <button
               onClick={() => setIsAdding(false)}
@@ -277,8 +398,13 @@ export default function ContextPage() {
             )}
             {showSkillsOnly && (
               <tr>
-                <th className="px-4 py-3 text-left font-medium" colSpan={5}>
+                <th className="px-4 py-3 text-left font-medium" colSpan={7}>
                   Skills ({filteredContexts?.length || 0})
+                  {categoryFilter !== "all" && (
+                    <span className="ml-2 text-slate-400 font-normal">
+                      — filtered by category: {categoryFilter}
+                    </span>
+                  )}
                 </th>
               </tr>
             )}
@@ -304,11 +430,15 @@ export default function ContextPage() {
                   ctx={ctx}
                   editing={editingKey === ctx.context_key}
                   editValue={editValue}
+                  editServiceId={editServiceId}
+                  editCategory={editCategory}
                   onEdit={() => handleEdit(ctx)}
                   onSave={() => handleSave(ctx.context_key)}
                   onCancel={() => setEditingKey(null)}
                   onDelete={() => handleDelete(ctx.context_key)}
                   onEditChange={setEditValue}
+                  onServiceIdChange={setEditServiceId}
+                  onCategoryChange={setEditCategory}
                 />
               );
             })}
@@ -317,6 +447,7 @@ export default function ContextPage() {
         {filteredContexts?.length === 0 && (
           <div className="p-8 text-center text-slate-500">
             {showSkillsOnly ? "No skills found" : "No context keys"}
+            {categoryFilter !== "all" && " in this category"}
           </div>
         )}
       </div>

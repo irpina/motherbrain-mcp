@@ -7,12 +7,16 @@ class ProjectContextCreate(BaseModel):
     value: dict
     updated_by: str
     description: Optional[str] = None
+    service_id: Optional[str] = None
+    category: Optional[str] = None
 
 
 class ProjectContextUpdate(BaseModel):
     value: dict
     updated_by: str
     description: Optional[str] = None
+    service_id: Optional[str] = None
+    category: Optional[str] = None
 
 
 class ProjectContextResponse(BaseModel):
@@ -21,4 +25,6 @@ class ProjectContextResponse(BaseModel):
     last_updated: datetime
     updated_by: str
     description: Optional[str]
+    service_id: Optional[str]
+    category: Optional[str]
     model_config = ConfigDict(from_attributes=True)

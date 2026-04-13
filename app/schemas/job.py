@@ -15,6 +15,8 @@ class JobCreate(BaseModel):
     target_service_id: Optional[str] = None
     topic: Optional[str] = None
     assigned_agent: Optional[str] = None  # Pre-assign to specific agent (e.g., from @mention)
+    context_job_ids: list[str] = []  # References to prior jobs for context
+    skill_key: Optional[str] = None  # Key from context/skills store
 
 
 class JobResponse(BaseModel):
@@ -35,7 +37,24 @@ class JobResponse(BaseModel):
     result: Optional[dict]
     error: Optional[str]
     topic: Optional[str]
+    context_job_ids: list  # Stored references to prior jobs
+    skill_key: Optional[str]  # Key from context/skills store
     model_config = ConfigDict(from_attributes=True)
+
+
+class ContextJobInfo(BaseModel):
+    """Lightweight info about a context job."""
+    job_id: str
+    type: str
+    status: str
+    result: Optional[dict]
+    payload: dict
+
+
+class JobDetail(JobResponse):
+    """Enriched job response with hydrated context references."""
+    context_jobs: list[ContextJobInfo] = []  # Hydrated context job details
+    skill: Optional[dict] = None  # Full value from project_context for skill_key
 
 
 class JobStatusUpdate(BaseModel):

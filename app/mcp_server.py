@@ -601,6 +601,8 @@ async def create_job(
     assigned_agent: str = "",
     priority: str = "medium",
     requirements: list[str] = [],
+    context_job_ids: list[str] = [],
+    skill_key: str = "",
 ) -> str:
     """Dispatch a job to a registered agent.
 
@@ -614,6 +616,10 @@ async def create_job(
                         any agent matching requirements can claim it.
         priority: "low", "medium" (default), or "high"
         requirements: List of agent capabilities required (e.g., ["python", "search"])
+        context_job_ids: List of prior job IDs to attach as context. Their results/payloads
+                         will be inlined when the agent picks up the job.
+        skill_key: Key from the context/skills store to attach (e.g., "skills.code_review").
+                   The skill's value will be inlined when the agent picks up the job.
 
     Returns:
         JSON with job_id, status, assigned_agent, and a tip to poll get_job_status.
@@ -623,13 +629,24 @@ async def create_job(
             "summarize",
             {"url": "https://example.com/article"},
             assigned_agent="kimi",
-            priority="high"
+            priority="high",
+            context_job_ids=["uuid-of-previous-job"],
+            skill_key="skills.summarize"
         )
     """
     start_time = time.time()
     db = await _get_db()
     
     try:
+        # Admin check: resolve token and verify role=admin
+        token = await _resolve_user_token(ctx)
+        if token:
+            from app.services.user_service import get_user_by_token
+            user = await get_user_by_token(db, token)
+            if not user or not user.is_active or user.role != "admin":
+                return json.dumps({"error": "Permission denied: Admin access required to create jobs"})
+        # If no token: allowed (MCP clients without auth can create jobs for backward compat)
+        
         # Resolve assigned_agent name → agent_id UUID
         resolved_agent_id = None
         if assigned_agent:
@@ -645,7 +662,9 @@ async def create_job(
             requirements=requirements,
             assigned_agent=resolved_agent_id,
             created_by=_get_caller_name(ctx) or "mcp-client",
-            target_type="agent"
+            target_type="agent",
+            context_job_ids=context_job_ids or [],
+            skill_key=skill_key if skill_key else None
         )
         
         # Create the job
@@ -661,6 +680,8 @@ async def create_job(
             "assigned_agent": job.assigned_agent,
             "assigned_agent_name": assigned_agent or None,
             "created_by": job.created_by,
+            "context_job_ids": job.context_job_ids,
+            "skill_key": job.skill_key,
             "tip": f"Call get_job_status('{job.job_id}') to check progress"
         }
         
@@ -669,7 +690,7 @@ async def create_job(
             topic="job",
             service_id="motherbrain",
             tool_name="create_job",
-            arguments={"type": type, "assigned_agent": assigned_agent, "priority": priority},
+            arguments={"type": type, "assigned_agent": assigned_agent, "priority": priority, "context_job_ids": context_job_ids, "skill_key": skill_key},
             response={"job_id": job.job_id, "status": job.status},
             status="ok",
             duration_ms=duration_ms,
@@ -953,24 +974,36 @@ async def get_event_log(
 
 
 @mcp.tool()
-async def get_context(key: str, mcp_ctx: Context) -> str:
+async def get_context(key: str, ctx: Context) -> str:
     """Fetch a value from the shared context/skill store.
 
     Use the skills.* prefix to retrieve agent skills:
       get_context("skills.summarize") → returns the summarizer prompt
       get_context("skills.code_review") → returns the code review prompt
 
-    Returns the stored value as JSON, or an error if the key doesn't exist.
+    Skills may be restricted to specific user groups. If you don't have
+    permission, you'll receive a "not found" error (to avoid leaking
+    existence of restricted skills).
+
+    Args:
+        key: The context key (e.g., "skills.summarize")
+
+    Returns:
+        The stored value as JSON, or an error if not found or not permitted.
     """
     from app.services.project_context_service import get_context as _get_context
 
     db = await _get_db()
     try:
         start = time.time()
-        ctx = await _get_context(db, key)
+        
+        # Resolve user token for RBAC check
+        token = await _resolve_user_token(ctx)
+        ctx_entry = await _get_context(db, key, token=token)
         duration_ms = int((time.time() - start) * 1000)
 
-        if not ctx:
+        if not ctx_entry:
+            # Return generic "not found" to avoid leaking existence of restricted skills
             result = {"error": f"Key '{key}' not found"}
             await append_event(
                 topic="system",
@@ -980,16 +1013,18 @@ async def get_context(key: str, mcp_ctx: Context) -> str:
                 response=result,
                 status="error",
                 duration_ms=duration_ms,
-                agent_id=_get_caller_name(mcp_ctx)
+                agent_id=_get_caller_name(ctx)
             )
             return json.dumps(result)
 
         result = {
-            "key": ctx.context_key,
-            "value": ctx.value,
-            "description": ctx.description,
-            "updated_by": ctx.updated_by,
-            "last_updated": str(ctx.last_updated)
+            "key": ctx_entry.context_key,
+            "value": ctx_entry.value,
+            "description": ctx_entry.description,
+            "updated_by": ctx_entry.updated_by,
+            "last_updated": str(ctx_entry.last_updated),
+            "category": ctx_entry.category,
+            "service_id": ctx_entry.service_id
         }
         await append_event(
             topic="system",
@@ -999,7 +1034,7 @@ async def get_context(key: str, mcp_ctx: Context) -> str:
             response={"found": True},
             status="ok",
             duration_ms=duration_ms,
-            agent_id=_get_caller_name(mcp_ctx)
+            agent_id=_get_caller_name(ctx)
         )
         return json.dumps(result, indent=2)
     finally:
@@ -1007,20 +1042,41 @@ async def get_context(key: str, mcp_ctx: Context) -> str:
 
 
 @mcp.tool()
-async def set_context(key: str, value_json: str, description: str = "", mcp_ctx: Context = None) -> str:
+async def set_context(
+    key: str,
+    value_json: str,
+    description: str = "",
+    service_id: str = "",
+    category: str = "",
+    mcp_ctx: Context = None
+) -> str:
     """Store a value in the shared context/skill store.
 
     For skills, use the skills.* prefix and put the prompt in value_json:
       set_context(
         "skills.summarize",
         '{"prompt": "Given the following text, return a concise summary..."}',
-        "Summarization skill"
+        "Summarization skill",
+        service_id="my-mcp-service",
+        category="nlp"
       )
 
-    value_json must be valid JSON.
-    Returns the stored entry on success.
+    Restricted skills:
+    - Set service_id to limit access to users with permission on that service
+    - Only admins or users with permission on the service can create restricted skills
+    - Leave service_id blank for public skills (any authenticated user)
+
+    Args:
+        key: The context key (e.g., "skills.summarize")
+        value_json: JSON-encoded value to store
+        description: Optional description of the entry
+        service_id: Optional MCP service ID to restrict access (blank = public)
+        category: Optional category tag for UI organization (e.g., "devops", "onboarding")
+
+    Returns:
+        The stored entry on success, or permission error if not allowed.
     """
-    from app.services.project_context_service import create_or_update_context
+    from app.services.project_context_service import create_or_update_context, check_write_permission
     from app.schemas.project_context import ProjectContextCreate
 
     db = await _get_db()
@@ -1031,24 +1087,39 @@ async def set_context(key: str, value_json: str, description: str = "", mcp_ctx:
         except json.JSONDecodeError as e:
             return json.dumps({"error": f"Invalid JSON: {e}"})
 
+        # Check write permission for restricted skills
+        target_service_id = service_id if service_id else None
+        token = await _resolve_user_token(mcp_ctx)
+
+        if target_service_id:
+            if not token:
+                return json.dumps({"error": "Authentication required to write restricted skills"})
+            allowed, reason = await check_write_permission(db, token, target_service_id)
+            if not allowed:
+                return json.dumps({"error": f"Permission denied: {reason}"})
+
         ctx = await create_or_update_context(
             db, key, ProjectContextCreate(
                 value=value,
                 updated_by="motherbrain-mcp",
                 description=description or None,
+                service_id=target_service_id,
+                category=category if category else None
             )
         )
         duration_ms = int((time.time() - start) * 1000)
         result = {
             "key": ctx.context_key,
             "value": ctx.value,
-            "description": ctx.description
+            "description": ctx.description,
+            "service_id": ctx.service_id,
+            "category": ctx.category
         }
         await append_event(
             topic="system",
             service_id="motherbrain",
             tool_name="set_context",
-            arguments={"key": key},
+            arguments={"key": key, "service_id": target_service_id, "category": category},
             response={"stored": True},
             status="ok",
             duration_ms=duration_ms,

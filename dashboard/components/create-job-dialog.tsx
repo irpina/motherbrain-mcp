@@ -16,6 +16,8 @@ export function CreateJobDialog({ isOpen, onClose }: CreateJobDialogProps) {
   const [requirements, setRequirements] = useState("");
   const [priority, setPriority] = useState("medium");
   const [assignedAgent, setAssignedAgent] = useState("");
+  const [contextJobIds, setContextJobIds] = useState("");
+  const [skillKey, setSkillKey] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -37,6 +39,12 @@ export function CreateJobDialog({ isOpen, onClose }: CreateJobDialogProps) {
         .split(",")
         .map((r) => r.trim())
         .filter(Boolean);
+      
+      // Parse context job IDs (comma-separated UUIDs)
+      const contextIdsArray = contextJobIds
+        .split(",")
+        .map((id) => id.trim())
+        .filter(Boolean);
 
       await api.createJob({
         type,
@@ -45,6 +53,8 @@ export function CreateJobDialog({ isOpen, onClose }: CreateJobDialogProps) {
         priority,
         created_by: "dashboard",
         assigned_agent: assignedAgent || null,
+        context_job_ids: contextIdsArray,
+        skill_key: skillKey || null,
       });
 
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
@@ -55,6 +65,8 @@ export function CreateJobDialog({ isOpen, onClose }: CreateJobDialogProps) {
       setRequirements("");
       setPriority("medium");
       setAssignedAgent("");
+      setContextJobIds("");
+      setSkillKey("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create job");
     } finally {
@@ -139,6 +151,46 @@ export function CreateJobDialog({ isOpen, onClose }: CreateJobDialogProps) {
             {onlineAgents.length === 0 && (
               <p className="text-xs text-slate-400 mt-1">No online agents</p>
             )}
+          </div>
+
+          <div className="border-t pt-4 mt-4">
+            <h3 className="text-sm font-medium text-slate-700 mb-3">Context References (Optional)</h3>
+            
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Context Job IDs
+                  <span className="text-slate-400 font-normal ml-1">— Comma-separated prior job UUIDs</span>
+                </label>
+                <input
+                  type="text"
+                  value={contextJobIds}
+                  onChange={(e) => setContextJobIds(e.target.value)}
+                  placeholder="e.g., uuid-1, uuid-2"
+                  className="w-full px-3 py-2 border rounded-md text-sm"
+                />
+                <p className="text-xs text-slate-400 mt-1">
+                  Agent will receive results/payloads from these jobs as context
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Skill Key
+                  <span className="text-slate-400 font-normal ml-1">— From context/skills store</span>
+                </label>
+                <input
+                  type="text"
+                  value={skillKey}
+                  onChange={(e) => setSkillKey(e.target.value)}
+                  placeholder="e.g., skills.code_review"
+                  className="w-full px-3 py-2 border rounded-md text-sm"
+                />
+                <p className="text-xs text-slate-400 mt-1">
+                  Skill value will be inlined when agent picks up the job
+                </p>
+              </div>
+            </div>
           </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}

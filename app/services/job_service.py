@@ -35,7 +35,9 @@ async def create_job(db: AsyncSession, job_create: JobCreate) -> Job:
         target_type=job_create.target_type,
         target_service_id=job_create.target_service_id,
         topic=job_create.topic,
-        assigned_agent=job_create.assigned_agent
+        assigned_agent=job_create.assigned_agent,
+        context_job_ids=job_create.context_job_ids or [],
+        skill_key=job_create.skill_key
     )
     db.add(job)
     await db.commit()
@@ -129,3 +131,54 @@ async def get_jobs_for_agent(db: AsyncSession, agent_id: str, status: str | None
     query = query.order_by(Job.created_at.desc()).limit(50)
     result = await db.execute(query)
     return list(result.scalars().all())
+
+
+async def get_job_enriched(db: AsyncSession, job_id: str) -> dict | None:
+    """Get a job with hydrated context references.
+    
+    Enriches the job with:
+    - context_jobs: Full details of referenced prior jobs
+    - skill: Full value from project_context for the skill_key
+    
+    Args:
+        db: Database session
+        job_id: The job ID to fetch
+    
+    Returns:
+        Dict with job data + enriched context, or None if not found
+    """
+    from app.schemas.job import JobResponse, ContextJobInfo
+    
+    job = await get_job(db, job_id)
+    if not job:
+        return None
+    
+    # Build base job response
+    job_data = JobResponse.model_validate(job).model_dump()
+    
+    # Hydrate context jobs (lightweight — id, type, status, result, payload only)
+    context_jobs = []
+    for cid in (job.context_job_ids or []):
+        ctx_job = await get_job(db, cid)
+        if ctx_job:
+            context_jobs.append(ContextJobInfo(
+                job_id=ctx_job.job_id,
+                type=ctx_job.type,
+                status=ctx_job.status,
+                result=ctx_job.result,
+                payload=ctx_job.payload
+            ).model_dump())
+    
+    # Hydrate skill (bypass RBAC - if admin attached it, agent should receive it)
+    skill = None
+    if job.skill_key:
+        from app.services.project_context_service import get_context
+        ctx_entry = await get_context(db, job.skill_key, token=None)
+        if ctx_entry:
+            skill = ctx_entry.value
+    
+    return {
+        **job_data,
+        "context_jobs": context_jobs,
+        "skill": skill
+    }

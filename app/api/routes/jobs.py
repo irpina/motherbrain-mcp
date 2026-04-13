@@ -2,9 +2,9 @@ from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.api.deps import verify_api_key, get_current_agent
+from app.api.deps import require_admin_user, get_current_agent
 from app.db.session import get_db
-from app.schemas.job import JobCreate, JobResponse, JobStatusUpdate, LogEntry, NoteCreate
+from app.schemas.job import JobCreate, JobResponse, JobDetail, JobStatusUpdate, LogEntry, NoteCreate
 from app.services import job_service
 from app.services import dispatcher
 from app.services.agent_action_service import create_action
@@ -19,7 +19,7 @@ async def list_jobs(
     status: Optional[str] = None,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(verify_api_key)
+    _: str = Depends(require_admin_user)
 ):
     """List all jobs with optional status filter. Admin only."""
     jobs = await job_service.list_jobs(db, status=status, limit=limit)
@@ -31,7 +31,7 @@ async def create_job(
     job_create: JobCreate,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(verify_api_key)
+    _: str = Depends(require_admin_user)
 ):
     """Create a new job and enqueue it. Admin only."""
     job = await job_service.create_job(db, job_create)
@@ -39,12 +39,12 @@ async def create_job(
     return job
 
 
-@router.get("/next", response_model=JobResponse)
+@router.get("/next", response_model=JobDetail)
 async def get_next_job(
     db: AsyncSession = Depends(get_db),
     agent = Depends(get_current_agent)
 ):
-    """Get the next available job from the queue. Requires agent token."""
+    """Get the next available job from the queue with enriched context. Requires agent token."""
     job_id = await redis_queue.dequeue_job()
     if not job_id:
         return Response(status_code=204)
@@ -70,17 +70,19 @@ async def get_next_job(
         )
     )
     
-    return job
+    # Return enriched job with context references
+    enriched = await job_service.get_job_enriched(db, job_id)
+    return enriched
 
 
-@router.get("/{job_id}", response_model=JobResponse)
+@router.get("/{job_id}", response_model=JobDetail)
 async def get_job(
     job_id: str,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(verify_api_key)
+    _: str = Depends(require_admin_user)
 ):
-    """Get a job by ID. Admin only."""
-    job = await job_service.get_job(db, job_id)
+    """Get a job by ID with enriched context. Admin only."""
+    job = await job_service.get_job_enriched(db, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
@@ -133,9 +135,9 @@ async def admin_force_job_status(
     job_id: str,
     update: JobStatusUpdate,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(verify_api_key)
+    _: str = Depends(require_admin_user)
 ):
-    """Admin override: update job status without ownership check. Requires API key."""
+    """Admin override: update job status without ownership check. Admin only."""
     job = await job_service.get_job(db, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -159,7 +161,7 @@ async def add_job_note(
     job_id: str,
     note: NoteCreate,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(verify_api_key)
+    _: str = Depends(require_admin_user)
 ):
     """Add a note to a job. Admin only."""
     job = await job_service.add_note(db, job_id, note)
@@ -173,7 +175,7 @@ async def add_child_job(
     job_id: str,
     child_id: str,
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(verify_api_key)
+    _: str = Depends(require_admin_user)
 ):
     """Add a child job reference to a parent job. Admin only."""
     job = await job_service.add_child_job(db, job_id, child_id)

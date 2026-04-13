@@ -46,3 +46,7 @@ class Job(Base):
     result: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     error: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     topic: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    
+    # Context references for agent context
+    context_job_ids: Mapped[list] = mapped_column(JSON, default=list)
+    skill_key: Mapped[Optional[str]] = mapped_column(String, nullable=True)
