@@ -8,6 +8,8 @@ python-dotenv
 httpx
 alembic
 mcp
+cryptography
+docker
 
 # Testing dependencies
 pytest

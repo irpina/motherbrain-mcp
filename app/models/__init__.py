@@ -8,5 +8,13 @@ from app.models.event_log import EventLog
 from app.models.user import User
 from app.models.group import Group
 from app.models.user_group import UserGroup
+from app.models.channel import Channel
+from app.models.chat_message import ChatMessage
+from app.models.agent_credential import AgentCredential
+from app.models.spawned_agent import SpawnedAgent
 
-__all__ = ["Agent", "Job", "AgentAction", "ProjectContext", "AgentMessage", "MCPService", "EventLog", "User", "Group", "UserGroup"]
+__all__ = [
+    "Agent", "Job", "AgentAction", "ProjectContext", "AgentMessage", 
+    "MCPService", "EventLog", "User", "Group", "UserGroup",
+    "Channel", "ChatMessage", "AgentCredential", "SpawnedAgent"
+]
