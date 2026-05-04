@@ -22,6 +22,8 @@ class MotherbrainAgent:
         self.channel = os.getenv("CHANNEL", "general")
         self.task = os.getenv("TASK", "")
         self.name = os.getenv("AGENT_NAME", "claude")
+        self.specialties = os.getenv("SPECIALTIES", "").split(",")
+        self.specialties = [s.strip() for s in self.specialties if s.strip()]
         
         if not self.api_key:
             print("ERROR: ANTHROPIC_API_KEY not set")
@@ -129,6 +131,45 @@ class MotherbrainAgent:
         })
         return result
     
+    async def poll_jobs(self):
+        """Poll for open jobs matching our specialties and auto-claim."""
+        if not self.specialties:
+            return
+        try:
+            result = await self.call_mcp_tool("chat_list_jobs", {
+                "sender": self.name,
+                "status": "open",
+                "limit": 20
+            })
+            jobs_data = result.get("result", "{}")
+            if isinstance(jobs_data, str):
+                jobs_data = json.loads(jobs_data)
+            jobs = jobs_data.get("jobs", [])
+
+            for job in jobs:
+                category = job.get("category", "general")
+                if category in self.specialties:
+                    job_id = job.get("id", "")
+                    print(f"Claiming job {job_id[:8]} ({category})...")
+                    claim_result = await self.call_mcp_tool("chat_claim_job", {
+                        "sender": self.name,
+                        "job_id": job_id
+                    })
+                    claim_data = claim_result.get("result", "{}")
+                    if isinstance(claim_data, str):
+                        claim_data = json.loads(claim_data)
+                    if "error" not in claim_data:
+                        work_channel = claim_data.get("work_channel", "")
+                        await self.send_message(
+                            f"Claimed job #{job_id[:8]} ({job.get('title', '')}). "
+                            f"Working in #{work_channel}"
+                        )
+                        print(f"Claimed job {job_id[:8]} -> #{work_channel}")
+                    else:
+                        print(f"Failed to claim job: {claim_data.get('error')}")
+        except Exception as e:
+            print(f"Job poll error: {e}")
+
     async def read_messages(self) -> list:
         """Read new messages from the channel."""
         result = await self.call_mcp_tool("chat_read", {
@@ -218,25 +259,32 @@ class MotherbrainAgent:
         print("")
         
         # Main loop
+        poll_counter = 0
         while True:
             try:
                 # Read new messages
                 messages = await self.read_messages()
-                
+
                 # Process messages that need responses
                 for msg in messages:
                     if self.should_respond(msg):
                         sender = msg.get("sender", "unknown")
                         print(f"Responding to {sender}...")
-                        
+
                         # Generate and send response
                         response = await self.generate_response(messages)
                         await self.send_message(response)
                         print(f"Sent: {response[:100]}...")
-                
+
+                # Periodically poll for open jobs matching specialties
+                poll_counter += 1
+                if poll_counter >= 6:  # every ~30 seconds
+                    poll_counter = 0
+                    await self.poll_jobs()
+
                 # Sleep before next poll
                 await asyncio.sleep(5)
-                
+
             except KeyboardInterrupt:
                 print("\nShutting down...")
                 break

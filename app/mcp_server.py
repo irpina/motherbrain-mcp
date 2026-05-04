@@ -1420,68 +1420,12 @@ async def chat_orchestrate(
     """
     db = await _get_db()
     try:
-        from app.api.routes.agent_spawn import _get_fernet
-        from app.models.agent_credential import AgentCredential
-        from app.models.spawned_agent import SpawnedAgent
-        from sqlalchemy import select
-        
-        # Get credentials for agent type
-        result = await db.execute(
-            select(AgentCredential).where(AgentCredential.agent_type == agent_type)
+        from app.api.routes.agent_spawn import _spawn_agent_internal
+
+        result = await _spawn_agent_internal(
+            db, agent_type, channel, task, spawned_by=sender
         )
-        credential = result.scalar_one_or_none()
-        
-        if not credential:
-            return json.dumps({
-                "error": f"No credentials stored for {agent_type}. Cannot spawn."
-            })
-        
-        # Decrypt API key
-        fernet = _get_fernet()
-        api_key = fernet.decrypt(credential.api_key_encrypted).decode()
-        
-        # Spawn container
-        import docker
-        client = docker.from_env()
-        
-        if agent_type == "claude":
-            image = "motherbrain-agent-claude:latest"
-            env_key = "ANTHROPIC_API_KEY"
-        elif agent_type == "codex":
-            image = "motherbrain-agent-codex:latest"
-            env_key = "OPENAI_API_KEY"
-        elif agent_type == "kimi":
-            image = "motherbrain-agent-kimi:latest"
-            env_key = "MOONSHOT_API_KEY"
-        else:
-            return json.dumps({"error": f"Unknown agent type: {agent_type}"})
-        
-        container = client.containers.run(
-            image=image,
-            detach=True,
-            environment={
-                env_key: api_key,
-                "MCP_SERVER_URL": "http://api:8000/mcp",
-                "MCP_API_KEY": os.getenv("API_KEY", "supersecret"),
-                "CHANNEL": channel,
-                "TASK": task
-            },
-            network="motherbrain-mcp_default",
-            name=f"mb-agent-{agent_type}-{str(uuid4())[:8]}",
-            labels={"motherbrain": "spawned-agent", "agent-type": agent_type}
-        )
-        
-        # Record in DB
-        spawned = SpawnedAgent(
-            agent_type=agent_type,
-            container_id=container.id,
-            channel=channel,
-            task=task
-        )
-        db.add(spawned)
-        await db.commit()
-        await db.refresh(spawned)
-        
+
         # Post delegation message
         from app.api.routes.chat import _save_and_broadcast_message
         await _save_and_broadcast_message(
@@ -1489,13 +1433,13 @@ async def chat_orchestrate(
             f"@{agent_type} tasked by {sender}: {task}",
             "system"
         )
-        
+
         return json.dumps({
             "status": "spawned",
             "agent_type": agent_type,
             "channel": channel,
             "task": task,
-            "spawned_id": spawned.id
+            "spawned_id": result["id"]
         })
     except Exception as e:
         return json.dumps({"error": str(e)})
@@ -1772,7 +1716,7 @@ async def chat_list_jobs(
 # ── Rules Management ───────────────────────────────────────────────────────
 
 @mcp.tool()
-async def chat_rules_list(sender: str, ctx: Context, status: str = "") -> str:
+async def chat_list_rules(sender: str, ctx: Context, status: str = "") -> str:
     """List shared working rules. Agents call this to get the current active rule set.
 
     Args:
@@ -1822,7 +1766,7 @@ async def chat_rules_list(sender: str, ctx: Context, status: str = "") -> str:
 
 
 @mcp.tool()
-async def chat_rules_propose(
+async def chat_propose_rule(
     sender: str,
     ctx: Context,
     rule: str,

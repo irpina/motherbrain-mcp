@@ -152,6 +152,103 @@ async def list_spawnable(
     ]
 
 
+async def _spawn_agent_internal(
+    db: AsyncSession,
+    agent_type: str,
+    channel: str,
+    task: str | None = None,
+    spawned_by: str | None = None
+) -> dict:
+    """Shared spawn logic used by REST API and MCP orchestration.
+
+    Args:
+        db: Async SQLAlchemy session
+        agent_type: claude, codex, or kimi
+        channel: Target channel for the agent
+        task: Optional task description
+        spawned_by: Optional orchestrator name for tracking
+
+    Returns:
+        Dict with spawned agent details.
+
+    Raises:
+        HTTPException: on credential/config errors (REST path)
+        ValueError: on credential/config errors (MCP path)
+    """
+    # Get and decrypt API key
+    result = await db.execute(
+        select(AgentCredential).where(AgentCredential.agent_type == agent_type)
+    )
+    credential = result.scalar_one_or_none()
+
+    if not credential:
+        raise ValueError(f"No credentials stored for {agent_type}. Store credentials first.")
+
+    fernet = _get_fernet()
+    api_key = fernet.decrypt(credential.api_key_encrypted).decode()
+
+    # Determine image, env key, and specialties based on agent type
+    if agent_type == "claude":
+        image = "motherbrain-agent-claude:latest"
+        env_key = "ANTHROPIC_API_KEY"
+        specialties = "frontend,backend,research"
+    elif agent_type == "codex":
+        image = "motherbrain-agent-codex:latest"
+        env_key = "OPENAI_API_KEY"
+        specialties = "backend,devops,data"
+    elif agent_type == "kimi":
+        image = "motherbrain-agent-kimi:latest"
+        env_key = "MOONSHOT_API_KEY"
+        specialties = "backend,research,general"
+    else:
+        raise ValueError(f"Unknown agent type: {agent_type}")
+
+    # Spawn container via Docker SDK
+    try:
+        import docker
+        client = docker.from_env()
+
+        container = client.containers.run(
+            image=image,
+            detach=True,
+            environment={
+                env_key: api_key,
+                "MCP_SERVER_URL": "http://api:8000/mcp",
+                "MCP_API_KEY": os.getenv("API_KEY", "supersecret"),
+                "CHANNEL": channel,
+                "TASK": task or "",
+                "SPAWNED_BY": spawned_by or "",
+                "SPECIALTIES": specialties
+            },
+            network="motherbrain-mcp_default",
+            name=f"mb-agent-{agent_type}-{str(uuid4())[:8]}",
+            labels={"motherbrain": "spawned-agent", "agent-type": agent_type}
+        )
+    except docker.errors.ImageNotFound:
+        raise ValueError(f"Agent image '{image}' not found. Build it first.")
+    except docker.errors.APIError as e:
+        raise ValueError(f"Docker error: {e}")
+
+    # Record in DB
+    spawned = SpawnedAgent(
+        agent_type=agent_type,
+        container_id=container.id,
+        channel=channel,
+        task=task
+    )
+    db.add(spawned)
+    await db.commit()
+    await db.refresh(spawned)
+
+    return {
+        "id": spawned.id,
+        "agent_type": agent_type,
+        "container_id": container.id[:12],
+        "channel": channel,
+        "status": "running"
+    }
+
+
 @router.post("/spawn/")
 async def spawn_agent(
     agent_type: str,
@@ -161,86 +258,15 @@ async def spawn_agent(
     _: str = Depends(require_admin_user)
 ):
     """Spawn a new agent container.
-    
+
     Requires:
     - Docker socket mounted at /var/run/docker.sock
     - Credential stored for the agent_type
     """
-    # Get and decrypt API key
-    result = await db.execute(
-        select(AgentCredential).where(AgentCredential.agent_type == agent_type)
-    )
-    credential = result.scalar_one_or_none()
-    
-    if not credential:
-        raise HTTPException(
-            status_code=400,
-            detail=f"No credentials stored for {agent_type}. Store credentials first."
-        )
-    
-    fernet = _get_fernet()
-    api_key = fernet.decrypt(credential.api_key_encrypted).decode()
-    
-    # Spawn container via Docker SDK
     try:
-        import docker
-        client = docker.from_env()
-        
-        # Determine image and env vars based on agent type
-        if agent_type == "claude":
-            image = "motherbrain-agent-claude:latest"
-            env_key = "ANTHROPIC_API_KEY"
-        elif agent_type == "codex":
-            image = "motherbrain-agent-codex:latest"
-            env_key = "OPENAI_API_KEY"
-        elif agent_type == "kimi":
-            image = "motherbrain-agent-kimi:latest"
-            env_key = "MOONSHOT_API_KEY"
-        else:
-            raise HTTPException(status_code=400, detail=f"Unknown agent type: {agent_type}")
-        
-        # Launch container
-        container = client.containers.run(
-            image=image,
-            detach=True,
-            environment={
-                env_key: api_key,
-                "MCP_SERVER_URL": "http://api:8000/mcp",
-                "MCP_API_KEY": os.getenv("API_KEY", "supersecret"),
-                "CHANNEL": channel,
-                "TASK": task or ""
-            },
-            network="motherbrain-mcp_default",
-            name=f"mb-agent-{agent_type}-{str(uuid4())[:8]}",
-            labels={"motherbrain": "spawned-agent", "agent-type": agent_type}
-        )
-        
-        # Record in DB
-        spawned = SpawnedAgent(
-            agent_type=agent_type,
-            container_id=container.id,
-            channel=channel,
-            task=task
-        )
-        db.add(spawned)
-        await db.commit()
-        await db.refresh(spawned)
-        
-        return {
-            "id": spawned.id,
-            "agent_type": agent_type,
-            "container_id": container.id[:12],
-            "channel": channel,
-            "status": "running"
-        }
-        
-    except docker.errors.ImageNotFound:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Agent image '{image}' not found. Build it first."
-        )
-    except docker.errors.APIError as e:
-        raise HTTPException(status_code=500, detail=f"Docker error: {e}")
+        return await _spawn_agent_internal(db, agent_type, channel, task)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/spawned/")
