@@ -185,4 +185,25 @@ export const api = {
     request<any>(`/chat/jobs/${jobId}/claim/`, { method: "POST" }),
   completeChatJob: (jobId: string, summary: string) =>
     request<any>(`/chat/jobs/${jobId}/done/", { method: "POST", body: JSON.stringify({ summary }) }),
+
+  // Rules
+  listRules: (params?: { status?: string; author?: string; limit?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.author) q.set("author", params.author);
+    if (params?.limit) q.set("limit", String(params.limit));
+    const qs = q.toString();
+    return request<{rules: any[]; count: number; epoch: number}>(`/rules/${qs ? "?" + qs : ""}`);
+  },
+  getActiveRules: () => request<{epoch: number; count: number; rules: string[]}>('/rules/active/'),
+  createRule: (body: { text: string; author: string; reason?: string }) =>
+    request<any>("/rules/", { method: "POST", body: JSON.stringify(body) }),
+  activateRule: (ruleId: string) =>
+    request<any>(`/rules/${ruleId}/activate/`, { method: "POST" }),
+  archiveRule: (ruleId: string) =>
+    request<any>(`/rules/${ruleId}/archive/`, { method: "POST" }),
+  draftRule: (ruleId: string) =>
+    request<any>(`/rules/${ruleId}/draft/`, { method: "POST" }),
+  deleteRule: (ruleId: string) =>
+    fetch(`${BASE_URL}/rules/${ruleId}/`, { method: "DELETE", headers: headers() }),
 };

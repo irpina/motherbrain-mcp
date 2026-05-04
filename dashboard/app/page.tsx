@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { StatCard } from "@/components/stat-card";
 import { AgentsPanel } from "@/components/agents-panel";
 import { ActivityFeed } from "@/components/activity-feed";
+import { RulesPanel } from "@/components/rules-panel";
 import { CreateJobDialog } from "@/components/create-job-dialog";
 import {
   Users,
@@ -87,6 +88,8 @@ export default function Overview() {
         <AgentsPanel />
         <ActivityFeed limit={10} />
       </div>
+
+      <RulesPanel />
 
       <CreateJobDialog isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} />
     </div>

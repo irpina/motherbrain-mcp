@@ -13,9 +13,10 @@ from app.models.chat_message import ChatMessage
 from app.models.agent_credential import AgentCredential
 from app.models.spawned_agent import SpawnedAgent
 from app.models.chat_job import ChatJob
+from app.models.rule import Rule
 
 __all__ = [
     "Agent", "Job", "AgentAction", "ProjectContext", "AgentMessage", 
     "MCPService", "EventLog", "User", "Group", "UserGroup",
-    "Channel", "ChatMessage", "AgentCredential", "SpawnedAgent", "ChatJob"
+    "Channel", "ChatMessage", "AgentCredential", "SpawnedAgent", "ChatJob", "Rule"
 ]

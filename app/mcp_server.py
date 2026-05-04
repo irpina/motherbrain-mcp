@@ -1767,3 +1767,115 @@ async def chat_list_jobs(
         return json.dumps({"error": str(e)})
     finally:
         await db.close()
+
+
+# ── Rules Management ───────────────────────────────────────────────────────
+
+@mcp.tool()
+async def chat_rules_list(sender: str, ctx: Context, status: str = "") -> str:
+    """List shared working rules. Agents call this to get the current active rule set.
+
+    Args:
+        sender: Your agent name
+        status: Filter by status — "active", "pending", "archived", "draft", or "" for all
+
+    Returns:
+        JSON with rules array and epoch number. Active rules are injected into prompts.
+    """
+    try:
+        db = AsyncSessionLocal()
+        from app.models.rule import Rule
+        from sqlalchemy import select, desc, func
+
+        query = select(Rule)
+        if status:
+            query = query.where(Rule.status == status)
+        query = query.order_by(desc(Rule.created_at)).limit(50)
+
+        result = await db.execute(query)
+        rules = result.scalars().all()
+
+        epoch_result = await db.execute(
+            select(func.max(Rule.epoch)).where(Rule.status == "active")
+        )
+        current_epoch = epoch_result.scalar() or 0
+
+        return json.dumps({
+            "epoch": current_epoch,
+            "count": len(rules),
+            "rules": [
+                {
+                    "id": r.id,
+                    "text": r.text,
+                    "author": r.author,
+                    "reason": r.reason,
+                    "status": r.status,
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                }
+                for r in rules
+            ]
+        }, indent=2)
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+    finally:
+        await db.close()
+
+
+@mcp.tool()
+async def chat_rules_propose(
+    sender: str,
+    ctx: Context,
+    rule: str,
+    reason: str = "",
+) -> str:
+    """Propose a new shared working rule. Only humans can activate rules.
+
+    Rules define how agents should behave, communicate, or organize work.
+    Keep rules concise (under 160 chars) and actionable.
+
+    Examples:
+        - "Always tag messages with specialty emoji"
+        - "Summarize long threads before replying"
+        - "Use private channels for sensitive data"
+
+    Args:
+        sender: Your agent name
+        rule: The rule text (max 500 chars)
+        reason: Why this rule helps (optional, max 1000 chars)
+
+    Returns:
+        JSON with the proposed rule id and status.
+    """
+    try:
+        db = AsyncSessionLocal()
+        from app.models.rule import Rule
+        from app.api.routes.chat import _save_and_broadcast_message
+
+        r = Rule(
+            text=rule.strip()[:500],
+            author=sender.strip(),
+            reason=reason.strip()[:1000] if reason else None,
+            status="pending",
+            epoch=0,
+        )
+        db.add(r)
+        await db.commit()
+        await db.refresh(r)
+
+        # Announce in general channel
+        await _save_and_broadcast_message(
+            db, "general", "system",
+            f"📜 Rule proposed by {sender}: \"{r.text}\" (id: {r.id[:8]})",
+            "system"
+        )
+
+        return json.dumps({
+            "id": r.id,
+            "text": r.text,
+            "status": r.status,
+            "message": "Rule proposed. A human must activate it before it takes effect.",
+        }, indent=2)
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+    finally:
+        await db.close()

@@ -13,6 +13,7 @@ import {
   Shield,
   UserCog,
   MessageSquare,
+  ScrollText,
   Settings,
 } from "lucide-react";
 
@@ -24,6 +25,7 @@ const navItems = [
   { href: "/context", label: "Context", icon: Database },
   { href: "/activity", label: "Activity", icon: Activity },
   { href: "/chat", label: "Chat", icon: MessageSquare },
+  { href: "/rules", label: "Rules", icon: ScrollText },
 ];
 
 const adminItems = [
