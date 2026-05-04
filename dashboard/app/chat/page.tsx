@@ -4,11 +4,12 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { formatRelativeTime } from "@/lib/utils";
-import { Plus, Send, Users, MessageSquare, MoreVertical, Trash2 } from "lucide-react";
+import { Plus, Send, Users, MessageSquare, Lock, Briefcase } from "lucide-react";
 
 interface Channel {
   id: string;
   name: string;
+  private: boolean;
   created_at: string;
 }
 
@@ -26,11 +27,20 @@ export default function ChatPage() {
   const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
   const [newChannelName, setNewChannelName] = useState("");
   const [showNewChannel, setShowNewChannel] = useState(false);
+  const [showJobsPanel, setShowJobsPanel] = useState(false);
   const [messageInput, setMessageInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [wsConnected, setWsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Fetch jobs
+  const { data: jobsData } = useQuery({
+    queryKey: ["chat", "jobs"],
+    queryFn: () => api.listChatJobs({ status: "open", limit: 50 }),
+    refetchInterval: 30000,
+    enabled: showJobsPanel,
+  });
 
   // Fetch channels
   const { data: channels, isLoading: channelsLoading } = useQuery({
@@ -171,8 +181,15 @@ export default function ChatPage() {
                 selectedChannel === channel.name ? "bg-slate-200" : ""
               }`}
             >
-              <MessageSquare size={16} className="text-slate-400" />
+              {channel.private ? (
+                <Lock size={16} className="text-slate-400" />
+              ) : (
+                <MessageSquare size={16} className="text-slate-400" />
+              )}
               <span className="truncate">{channel.name}</span>
+              {channel.private && (
+                <span className="ml-auto text-[10px] text-slate-400">private</span>
+              )}
             </button>
           ))}
           {channels?.length === 0 && (
@@ -225,9 +242,18 @@ export default function ChatPage() {
                   </span>
                 </div>
               </div>
-              <button className="p-2 hover:bg-slate-100 rounded">
-                <Users size={18} className="text-slate-400" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setShowJobsPanel(!showJobsPanel)}
+                  className={`p-2 rounded ${showJobsPanel ? "bg-blue-100 text-blue-600" : "hover:bg-slate-100 text-slate-400"}`}
+                  title="Jobs"
+                >
+                  <Briefcase size={18} />
+                </button>
+                <button className="p-2 hover:bg-slate-100 rounded text-slate-400">
+                  <Users size={18} />
+                </button>
+              </div>
             </div>
 
             {/* Messages */}
@@ -292,6 +318,55 @@ export default function ChatPage() {
           </div>
         )}
       </div>
+
+      {/* Jobs Panel */}
+      {showJobsPanel && (
+        <div className="w-80 bg-white border-l flex flex-col">
+          <div className="p-4 border-b">
+            <h2 className="font-semibold flex items-center gap-2">
+              <Briefcase size={18} />
+              Open Jobs
+            </h2>
+          </div>
+          <div className="flex-1 overflow-y-auto p-3 space-y-3">
+            {jobsData?.jobs?.length === 0 && (
+              <div className="text-sm text-slate-400 text-center py-8">No open jobs</div>
+            )}
+            {jobsData?.jobs?.map((job: any) => (
+              <div key={job.id} className="border rounded-lg p-3 hover:bg-slate-50">
+                <div className="flex items-start justify-between gap-2">
+                  <h4 className="font-medium text-sm">{job.title}</h4>
+                  <span className="text-[10px] px-1.5 py-0.5 bg-slate-100 rounded text-slate-500 uppercase">
+                    {job.category}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1 line-clamp-3">{job.body}</p>
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-[10px] text-slate-400">#{job.channel}</span>
+                  <button
+                    onClick={async () => {
+                      try {
+                        await api.claimChatJob(job.id);
+                        queryClient.invalidateQueries({ queryKey: ["chat", "jobs"] });
+                        queryClient.invalidateQueries({ queryKey: ["chat", "channels"] });
+                        alert(`Claimed job: ${job.title}`);
+                      } catch (err: unknown) {
+                        alert(`Failed to claim: ${err instanceof Error ? err.message : String(err)}`);
+                      }
+                    }}
+                    className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  >
+                    Claim
+                  </button>
+                </div>
+              </div>
+            ))}
+            {!jobsData && (
+              <div className="text-sm text-slate-400 text-center py-8">Loading jobs...</div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

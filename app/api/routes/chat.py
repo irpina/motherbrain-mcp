@@ -14,6 +14,7 @@ from app.api.deps import require_admin_user, get_current_agent
 from app.db.session import get_db
 from app.models.channel import Channel
 from app.models.chat_message import ChatMessage
+from app.models.chat_job import ChatJob
 from app.queue.redis_queue import redis_async, set_key, get_key, delete_key
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -213,3 +214,158 @@ async def chat_websocket(
         pass
     finally:
         await pubsub.unsubscribe(f"chat:{channel_name}")
+
+
+# ── Job Management ───────────────────────────────────────────────────────────
+
+@router.get("/jobs/")
+async def list_jobs(
+    category: str | None = None,
+    status: str = "open",
+    limit: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(require_admin_user)
+):
+    """List jobs with optional filtering."""
+    from app.models.chat_job import ChatJob
+    
+    query = select(ChatJob)
+    if category:
+        query = query.where(ChatJob.category == category)
+    if status:
+        query = query.where(ChatJob.status == status)
+    query = query.order_by(desc(ChatJob.created_at)).limit(limit)
+    
+    result = await db.execute(query)
+    jobs = result.scalars().all()
+    
+    return {
+        "count": len(jobs),
+        "filters": {"category": category, "status": status},
+        "jobs": [
+            {
+                "id": j.id,
+                "title": j.title,
+                "body": j.body,
+                "category": j.category,
+                "status": j.status,
+                "claimed_by": j.claimed_by,
+                "created_by": j.created_by,
+                "channel": j.channel,
+                "summary": j.summary,
+                "created_at": j.created_at.isoformat()
+            }
+            for j in jobs
+        ]
+    }
+
+
+@router.post("/jobs/")
+async def create_job(
+    title: str,
+    body: str,
+    category: str = "general",
+    channel: str = "general",
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(require_admin_user)
+):
+    """Create a new job (admin API)."""
+    from app.models.chat_job import ChatJob
+    from app.api.routes.chat import _save_and_broadcast_message
+    
+    job = ChatJob(
+        title=title,
+        body=body,
+        category=category,
+        channel=channel,
+        created_by="admin"
+    )
+    db.add(job)
+    await db.commit()
+    await db.refresh(job)
+    
+    # Post job card to channel
+    job_card = (
+        f"[JOB #{job.id[:8]}] {category.upper()} — {title}\n"
+        f"{body}\n"
+        f"Posted by: admin | Status: open"
+    )
+    await _save_and_broadcast_message(
+        db, channel, "system", job_card, "system"
+    )
+    
+    return {
+        "id": job.id,
+        "title": job.title,
+        "category": job.category,
+        "status": job.status,
+        "channel": job.channel
+    }
+
+
+@router.post("/jobs/{job_id}/claim/")
+async def claim_job(
+    job_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(require_admin_user)
+):
+    """Claim a job (admin API)."""
+    from app.models.chat_job import ChatJob
+    from app.models.channel import Channel
+    
+    result = await db.execute(select(ChatJob).where(ChatJob.id == job_id))
+    job = result.scalar_one_or_none()
+    
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.status != "open":
+        raise HTTPException(status_code=400, detail=f"Job already {job.status}")
+    
+    job.status = "claimed"
+    job.claimed_by = "admin"
+    
+    # Create private work channel
+    work_channel = f"job-{job.id[:8]}"
+    result = await db.execute(select(Channel).where(Channel.name == work_channel))
+    if not result.scalar_one_or_none():
+        ch = Channel(name=work_channel, private=True, created_by="admin")
+        db.add(ch)
+    
+    await db.commit()
+    
+    return {
+        "id": job.id,
+        "status": "claimed",
+        "work_channel": work_channel
+    }
+
+
+@router.post("/jobs/{job_id}/done/")
+async def job_done(
+    job_id: str,
+    summary: str,
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(require_admin_user)
+):
+    """Mark a job as done (admin API)."""
+    from app.models.chat_job import ChatJob
+    from app.api.routes.chat import _save_and_broadcast_message
+    
+    result = await db.execute(select(ChatJob).where(ChatJob.id == job_id))
+    job = result.scalar_one_or_none()
+    
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    job.status = "done"
+    job.summary = summary
+    await db.commit()
+    
+    # Post completion
+    await _save_and_broadcast_message(
+        db, job.channel, "system",
+        f"Job #{job.id[:8]} COMPLETED:\n{summary}",
+        "system"
+    )
+    
+    return {"id": job.id, "status": "done", "summary": summary}

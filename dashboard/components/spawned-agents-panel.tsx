@@ -15,6 +15,11 @@ export function SpawnedAgentsPanel() {
     refetchInterval: 5000,
   });
 
+  const { data: spawnable } = useQuery({
+    queryKey: ["agents", "spawnable"],
+    queryFn: api.listSpawnableAgents,
+  });
+
   const [terminalAgent, setTerminalAgent] = useState<{
     id: string;
     type: string;
@@ -31,6 +36,10 @@ export function SpawnedAgentsPanel() {
     } catch (err: unknown) {
       alert(`Failed to kill agent: ${err instanceof Error ? err.message : String(err)}`);
     }
+  };
+
+  const getSpecialties = (agentType: string) => {
+    return spawnable?.find((s: any) => s.type === agentType)?.specialties || [];
   };
 
   if (isLoading) {
@@ -56,6 +65,7 @@ export function SpawnedAgentsPanel() {
             <thead className="bg-slate-50 text-slate-600">
               <tr>
                 <th className="px-4 py-2 text-left font-medium">Type</th>
+                <th className="px-4 py-2 text-left font-medium">Specialties</th>
                 <th className="px-4 py-2 text-left font-medium">Channel</th>
                 <th className="px-4 py-2 text-left font-medium">Task</th>
                 <th className="px-4 py-2 text-left font-medium">Status</th>
@@ -70,10 +80,19 @@ export function SpawnedAgentsPanel() {
                     <span className="capitalize font-medium">{agent.agent_type}</span>
                   </td>
                   <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-1">
+                      {getSpecialties(agent.agent_type).map((spec: string) => (
+                        <span key={spec} className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs capitalize">
+                          {spec}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
                     <span className="text-slate-600">#{agent.channel}</span>
                   </td>
                   <td className="px-4 py-3">
-                    <span className="text-slate-500 truncate max-w-[200px] block">
+                    <span className="text-slate-500 truncate max-w-[150px] block">
                       {agent.task || "—"}
                     </span>
                   </td>

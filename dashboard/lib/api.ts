@@ -169,4 +169,20 @@ export const api = {
   // Agent Terminal
   createTerminalToken: (agentId: string) =>
     request<{token: string; expires_in: number; container_id: string}>(`/agents/spawned/${agentId}/terminal-token/`, { method: "POST" }),
+
+  // Jobs
+  listChatJobs: (params?: { category?: string; status?: string; limit?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.category) q.set("category", params.category);
+    if (params?.status) q.set("status", params.status);
+    if (params?.limit) q.set("limit", String(params.limit));
+    const qs = q.toString();
+    return request<{jobs: any[]; count: number}>(`/chat/jobs/${qs ? "?" + qs : ""}`);
+  },
+  createChatJob: (body: { title: string; body: string; category: string; channel: string }) =>
+    request<any>("/chat/jobs/", { method: "POST", body: JSON.stringify(body) }),
+  claimChatJob: (jobId: string) =>
+    request<any>(`/chat/jobs/${jobId}/claim/`, { method: "POST" }),
+  completeChatJob: (jobId: string, summary: string) =>
+    request<any>(`/chat/jobs/${jobId}/done/", { method: "POST", body: JSON.stringify({ summary }) }),
 };
