@@ -127,11 +127,11 @@ async def list_spawnable(
     result = await db.execute(select(AgentCredential))
     creds = {c.agent_type: c for c in result.scalars().all()}
     
-    # Define available agent types
+    # Define available agent types with specialties for auto-routing
     agent_types = [
-        {"type": "claude", "name": "Claude Code", "description": "Anthropic Claude CLI agent"},
-        {"type": "codex", "name": "OpenAI Codex", "description": "OpenAI Codex CLI agent"},
-        {"type": "kimi", "name": "Kimi Code", "description": "Moonshot AI Kimi agent"},
+        {"type": "claude", "name": "Claude Code", "description": "Anthropic Claude CLI agent", "specialties": ["frontend", "backend", "research"]},
+        {"type": "codex", "name": "OpenAI Codex", "description": "OpenAI Codex CLI agent", "specialties": ["backend", "devops", "data"]},
+        {"type": "kimi", "name": "Kimi Code", "description": "Moonshot AI Kimi agent", "specialties": ["backend", "research", "general"]},
     ]
     
     # Get running counts

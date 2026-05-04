@@ -1331,3 +1331,439 @@ async def chat_who(channel: str, ctx: Context) -> str:
         }, indent=2)
     except Exception as e:
         return json.dumps({"error": str(e)})
+
+
+# ── Orchestration Tools ──────────────────────────────────────────────────────
+
+@mcp.tool()
+async def chat_create_channel(
+    sender: str,
+    name: str,
+    ctx: Context,
+    description: str = "",
+    private: bool = True
+) -> str:
+    """Create a new chat channel.
+    
+    Agents use this to spawn private channels for isolated coordination.
+    Private channels don't appear in the main sidebar.
+    
+    Args:
+        sender: Your agent name
+        name: Channel name (lowercase, no spaces)
+        description: Optional description
+        private: Whether channel is hidden from main sidebar (default: True)
+    
+    Returns:
+        Confirmation with channel name.
+    """
+    db = await _get_db()
+    try:
+        from sqlalchemy import select
+        from app.models.channel import Channel
+        
+        # Check if channel exists
+        result = await db.execute(select(Channel).where(Channel.name == name))
+        if result.scalar_one_or_none():
+            return json.dumps({"error": f"Channel '{name}' already exists"})
+        
+        # Create channel
+        channel = Channel(
+            name=name,
+            private=private,
+            created_by=sender
+        )
+        db.add(channel)
+        await db.commit()
+        
+        # Post system message
+        from app.api.routes.chat import _save_and_broadcast_message
+        await _save_and_broadcast_message(
+            db, name, "system", f"Channel created by {sender}", "system"
+        )
+        
+        return json.dumps({
+            "status": "created",
+            "channel": name,
+            "private": private
+        })
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+    finally:
+        await db.close()
+
+
+@mcp.tool()
+async def chat_orchestrate(
+    sender: str,
+    agent_type: str,
+    channel: str,
+    task: str,
+    ctx: Context
+) -> str:
+    """Spawn an agent into a channel to perform a task.
+    
+    This is the core orchestration primitive — one agent delegates work
+    to another by spawning it into a target channel.
+    
+    Args:
+        sender: Your agent name (the orchestrator)
+        agent_type: Which agent type to spawn (claude, codex, kimi)
+        channel: Target channel for the spawned agent
+        task: The task description
+    
+    Returns:
+        Confirmation with spawned agent ID.
+    
+    Example:
+        chat_orchestrate("claude", "kimi", "review-pr-47", "Review PR #47 for security issues")
+    """
+    db = await _get_db()
+    try:
+        from app.api.routes.agent_spawn import _get_fernet
+        from app.models.agent_credential import AgentCredential
+        from app.models.spawned_agent import SpawnedAgent
+        from sqlalchemy import select
+        
+        # Get credentials for agent type
+        result = await db.execute(
+            select(AgentCredential).where(AgentCredential.agent_type == agent_type)
+        )
+        credential = result.scalar_one_or_none()
+        
+        if not credential:
+            return json.dumps({
+                "error": f"No credentials stored for {agent_type}. Cannot spawn."
+            })
+        
+        # Decrypt API key
+        fernet = _get_fernet()
+        api_key = fernet.decrypt(credential.api_key_encrypted).decode()
+        
+        # Spawn container
+        import docker
+        client = docker.from_env()
+        
+        if agent_type == "claude":
+            image = "motherbrain-agent-claude:latest"
+            env_key = "ANTHROPIC_API_KEY"
+        elif agent_type == "codex":
+            image = "motherbrain-agent-codex:latest"
+            env_key = "OPENAI_API_KEY"
+        elif agent_type == "kimi":
+            image = "motherbrain-agent-kimi:latest"
+            env_key = "MOONSHOT_API_KEY"
+        else:
+            return json.dumps({"error": f"Unknown agent type: {agent_type}"})
+        
+        container = client.containers.run(
+            image=image,
+            detach=True,
+            environment={
+                env_key: api_key,
+                "MCP_SERVER_URL": "http://api:8000/mcp",
+                "MCP_API_KEY": os.getenv("API_KEY", "supersecret"),
+                "CHANNEL": channel,
+                "TASK": task
+            },
+            network="motherbrain-mcp_default",
+            name=f"mb-agent-{agent_type}-{str(uuid4())[:8]}",
+            labels={"motherbrain": "spawned-agent", "agent-type": agent_type}
+        )
+        
+        # Record in DB
+        spawned = SpawnedAgent(
+            agent_type=agent_type,
+            container_id=container.id,
+            channel=channel,
+            task=task
+        )
+        db.add(spawned)
+        await db.commit()
+        await db.refresh(spawned)
+        
+        # Post delegation message
+        from app.api.routes.chat import _save_and_broadcast_message
+        await _save_and_broadcast_message(
+            db, channel, "system",
+            f"@{agent_type} tasked by {sender}: {task}",
+            "system"
+        )
+        
+        return json.dumps({
+            "status": "spawned",
+            "agent_type": agent_type,
+            "channel": channel,
+            "task": task,
+            "spawned_id": spawned.id
+        })
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+    finally:
+        await db.close()
+
+
+# ── Job Tools ────────────────────────────────────────────────────────────────
+
+@mcp.tool()
+async def chat_propose_job(
+    sender: str,
+    title: str,
+    body: str,
+    category: str,
+    ctx: Context,
+    channel: str = "general"
+) -> str:
+    """Propose a job for agents to claim and complete.
+    
+    Jobs are structured work items tied to a channel. Agents can claim
+    open jobs, work on them, and mark them done.
+    
+    Categories: frontend, backend, devops, data, qa, research, general
+    
+    Args:
+        sender: Your name
+        title: Short job title
+        body: Detailed job description
+        category: Job category for routing
+        channel: Channel to post the job in
+    
+    Returns:
+        Job ID and confirmation.
+    """
+    db = await _get_db()
+    try:
+        from app.models.chat_job import ChatJob
+        from app.api.routes.chat import _save_and_broadcast_message
+        
+        # Create job
+        job = ChatJob(
+            title=title,
+            body=body,
+            category=category,
+            channel=channel,
+            created_by=sender
+        )
+        db.add(job)
+        await db.commit()
+        await db.refresh(job)
+        
+        # Post job card to channel
+        job_card = (
+            f"[JOB #{job.id[:8]}] {category.upper()} — {title}\n"
+            f"{body}\n"
+            f"Posted by: {sender} | Status: open | Claim via chat_claim_job"
+        )
+        await _save_and_broadcast_message(
+            db, channel, "system", job_card, "system"
+        )
+        
+        return json.dumps({
+            "status": "proposed",
+            "job_id": job.id,
+            "title": title,
+            "category": category,
+            "channel": channel
+        })
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+    finally:
+        await db.close()
+
+
+@mcp.tool()
+async def chat_claim_job(
+    sender: str,
+    job_id: str,
+    ctx: Context
+) -> str:
+    """Claim an open job.
+    
+    Marks the job as claimed and optionally creates a private
+    channel for the work.
+    
+    Args:
+        sender: Your name
+        job_id: Full job UUID or short ID (first 8 chars)
+    
+    Returns:
+        Job details and work channel name.
+    """
+    db = await _get_db()
+    try:
+        from sqlalchemy import select, or_
+        from app.models.chat_job import ChatJob
+        
+        # Find job by full ID or short ID
+        result = await db.execute(
+            select(ChatJob).where(
+                or_(
+                    ChatJob.id == job_id,
+                    ChatJob.id.like(f"{job_id}%")
+                )
+            )
+        )
+        job = result.scalar_one_or_none()
+        
+        if not job:
+            return json.dumps({"error": f"Job '{job_id}' not found"})
+        
+        if job.status != "open":
+            return json.dumps({"error": f"Job already {job.status} by {job.claimed_by}"})
+        
+        # Claim job
+        job.status = "claimed"
+        job.claimed_by = sender
+        await db.commit()
+        
+        # Create private work channel
+        work_channel = f"job-{job.id[:8]}"
+        from app.models.channel import Channel
+        
+        result = await db.execute(select(Channel).where(Channel.name == work_channel))
+        if not result.scalar_one_or_none():
+            channel = Channel(
+                name=work_channel,
+                private=True,
+                created_by=sender
+            )
+            db.add(channel)
+            await db.commit()
+        
+        # Post to original channel
+        from app.api.routes.chat import _save_and_broadcast_message
+        await _save_and_broadcast_message(
+            db, job.channel, "system",
+            f"Job #{job.id[:8]} claimed by {sender}. Work channel: #{work_channel}",
+            "system"
+        )
+        
+        return json.dumps({
+            "status": "claimed",
+            "job_id": job.id,
+            "work_channel": work_channel,
+            "title": job.title
+        })
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+    finally:
+        await db.close()
+
+
+@mcp.tool()
+async def chat_job_done(
+    sender: str,
+    job_id: str,
+    summary: str,
+    ctx: Context
+) -> str:
+    """Mark a claimed job as done and post summary.
+    
+    Args:
+        sender: Your name (must be the claimant)
+        job_id: Full job UUID or short ID
+        summary: Work summary / results
+    
+    Returns:
+        Confirmation with summary.
+    """
+    db = await _get_db()
+    try:
+        from sqlalchemy import select, or_
+        from app.models.chat_job import ChatJob
+        
+        result = await db.execute(
+            select(ChatJob).where(
+                or_(
+                    ChatJob.id == job_id,
+                    ChatJob.id.like(f"{job_id}%")
+                )
+            )
+        )
+        job = result.scalar_one_or_none()
+        
+        if not job:
+            return json.dumps({"error": f"Job '{job_id}' not found"})
+        
+        if job.claimed_by != sender:
+            return json.dumps({"error": f"Only claimant ({job.claimed_by}) can mark done"})
+        
+        # Mark done
+        job.status = "done"
+        job.summary = summary
+        await db.commit()
+        
+        # Post completion
+        from app.api.routes.chat import _save_and_broadcast_message
+        await _save_and_broadcast_message(
+            db, job.channel, "system",
+            f"Job #{job.id[:8]} COMPLETED by {sender}:\n{summary}",
+            "system"
+        )
+        
+        return json.dumps({
+            "status": "done",
+            "job_id": job.id,
+            "summary": summary
+        })
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+    finally:
+        await db.close()
+
+
+@mcp.tool()
+async def chat_list_jobs(
+    sender: str,
+    ctx: Context,
+    category: str = "",
+    status: str = "open",
+    limit: int = 20
+) -> str:
+    """List jobs matching filters.
+    
+    Args:
+        sender: Your name
+        category: Filter by category (empty = all)
+        status: Filter by status (open, claimed, done)
+        limit: Max results (default 20)
+    
+    Returns:
+        JSON array of matching jobs.
+    """
+    db = await _get_db()
+    try:
+        from sqlalchemy import select, desc
+        from app.models.chat_job import ChatJob
+        
+        query = select(ChatJob)
+        if category:
+            query = query.where(ChatJob.category == category)
+        if status:
+            query = query.where(ChatJob.status == status)
+        query = query.order_by(desc(ChatJob.created_at)).limit(limit)
+        
+        result = await db.execute(query)
+        jobs = result.scalars().all()
+        
+        return json.dumps({
+            "count": len(jobs),
+            "filters": {"category": category or None, "status": status},
+            "jobs": [
+                {
+                    "id": j.id,
+                    "title": j.title,
+                    "category": j.category,
+                    "status": j.status,
+                    "claimed_by": j.claimed_by,
+                    "created_by": j.created_by,
+                    "channel": j.channel,
+                    "created_at": j.created_at.isoformat()
+                }
+                for j in jobs
+            ]
+        }, indent=2)
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+    finally:
+        await db.close()

@@ -12,9 +12,10 @@ from app.models.channel import Channel
 from app.models.chat_message import ChatMessage
 from app.models.agent_credential import AgentCredential
 from app.models.spawned_agent import SpawnedAgent
+from app.models.chat_job import ChatJob
 
 __all__ = [
     "Agent", "Job", "AgentAction", "ProjectContext", "AgentMessage", 
     "MCPService", "EventLog", "User", "Group", "UserGroup",
-    "Channel", "ChatMessage", "AgentCredential", "SpawnedAgent"
+    "Channel", "ChatMessage", "AgentCredential", "SpawnedAgent", "ChatJob"
 ]
