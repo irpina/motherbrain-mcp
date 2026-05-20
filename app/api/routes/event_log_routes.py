@@ -4,8 +4,12 @@ This endpoint provides the dashboard with access to the Kafka-style event log
 that records all MCP tool calls, heartbeats, and system events.
 """
 
+import asyncio
+import json
 from fastapi import APIRouter, Query
+from fastapi.responses import StreamingResponse
 from app.services.event_log import get_events
+from app.queue.redis_queue import redis_async
 
 router = APIRouter(tags=["event-log"])
 
@@ -46,3 +50,56 @@ async def list_events(
         },
         "events": events
     }
+
+
+@router.get("/api/event-log/stream")
+async def stream_events(
+    topic: str = Query(""),
+    service_id: str = Query("")
+):
+    """SSE stream of live event log entries.
+
+    Clients connect once and receive newline-delimited SSE frames as events
+    are appended. Optional topic/service_id filters are applied server-side.
+    Sends a keepalive comment every 15 seconds so proxies don't close the
+    connection.
+    """
+    async def _generator():
+        pubsub = redis_async.pubsub()
+        await pubsub.subscribe("event_log")
+        try:
+            while True:
+                # Use wait_for so we can inject keepalives
+                try:
+                    msg = await asyncio.wait_for(pubsub.get_message(ignore_subscribe_messages=True), timeout=15)
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+                    continue
+
+                if msg is None:
+                    await asyncio.sleep(0.05)
+                    continue
+
+                try:
+                    event = json.loads(msg["data"])
+                except (json.JSONDecodeError, KeyError, TypeError):
+                    continue
+
+                if topic and event.get("topic") != topic:
+                    continue
+                if service_id and event.get("service_id") != service_id:
+                    continue
+
+                yield f"data: {json.dumps(event)}\n\n"
+        finally:
+            await pubsub.unsubscribe("event_log")
+            await pubsub.aclose()
+
+    return StreamingResponse(
+        _generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )

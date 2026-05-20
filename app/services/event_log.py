@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import AsyncSessionLocal
 from app.models.event_log import EventLog
 from app.redact import redact
+from app.queue import redis_queue
 
 
 async def append_event(
@@ -53,7 +54,9 @@ async def append_event(
         db.add(event)
         await db.commit()
         await db.refresh(event)
-        return event
+
+    await redis_queue.publish_event("event_log", _event_to_dict(event))
+    return event
 
 
 async def get_events(
