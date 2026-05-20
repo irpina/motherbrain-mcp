@@ -58,14 +58,6 @@ services:
       - api
     restart: unless-stopped
 
-  playwright:
-    build:
-      context: .
-      dockerfile: playwright.Dockerfile
-    ports:
-      - "8931:8931"
-    restart: unless-stopped
-
 volumes:
   postgres_data:
   redis_data:
