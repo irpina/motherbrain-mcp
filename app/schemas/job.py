@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, ConfigDict
 
@@ -39,6 +40,7 @@ class JobResponse(BaseModel):
     topic: Optional[str]
     context_job_ids: list  # Stored references to prior jobs
     skill_key: Optional[str]  # Key from context/skills store
+    created_at: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
 
 

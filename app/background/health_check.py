@@ -23,7 +23,7 @@ PROBE_TIMEOUT_SECONDS = 5
 async def _probe(endpoint: str, mcp_path: str = "/mcp") -> bool:
     """Return True if the endpoint responds to HTTP (any status code)."""
     from urllib.parse import urlparse
-    path = (mcp_path or "/mcp").rstrip("/") or "/"
+    path = mcp_path or "/mcp"
     url = endpoint.rstrip("/") + path
     parsed = urlparse(endpoint)
     port_str = f":{parsed.port}" if parsed.port else ""

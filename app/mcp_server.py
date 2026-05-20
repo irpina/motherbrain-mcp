@@ -81,7 +81,7 @@ async def _discover_capabilities(endpoint: str, mcp_path_override: str = "/mcp")
     from uuid import uuid4
     import httpx
 
-    mcp_path = (mcp_path_override or "/mcp").rstrip("/") or "/"
+    mcp_path = mcp_path_override or "/mcp"
     mcp_url = endpoint.rstrip("/") + mcp_path
     parsed = urlparse(endpoint)
     port_str = f":{parsed.port}" if parsed.port else ""
