@@ -63,3 +63,8 @@ Thumbs.db
 
 # External services (not part of core release)
 agentchattr/
+
+# Local-only dev tooling (not shipped in repo)
+docker-compose.override.yml
+playwright.Dockerfile
+dashboard-screenshot.png
