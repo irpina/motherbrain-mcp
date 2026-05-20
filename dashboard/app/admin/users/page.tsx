@@ -4,6 +4,7 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { truncateId } from "@/lib/utils";
+import { Loader2 } from "lucide-react";
 
 interface User {
   user_id: string;
@@ -62,7 +63,7 @@ export default function UsersAdminPage() {
       setNewUserRole("user");
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
     } catch (err) {
-      alert(`Failed to create user: ${err}`);
+      console.error(`Failed to create user: ${err}`);
     }
   };
 
@@ -73,7 +74,7 @@ export default function UsersAdminPage() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
     } catch (err) {
-      alert(`Failed to deactivate user: ${err}`);
+      console.error(`Failed to deactivate user: ${err}`);
     }
   };
 
@@ -84,7 +85,7 @@ export default function UsersAdminPage() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       queryClient.invalidateQueries({ queryKey: ["admin", "users", managingGroupsFor.user_id, "groups"] });
     } catch (err) {
-      alert(`Failed to add to group: ${err}`);
+      console.error(`Failed to add to group: ${err}`);
     }
   };
 
@@ -95,19 +96,19 @@ export default function UsersAdminPage() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       queryClient.invalidateQueries({ queryKey: ["admin", "users", managingGroupsFor.user_id, "groups"] });
     } catch (err) {
-      alert(`Failed to remove from group: ${err}`);
+      console.error(`Failed to remove from group: ${err}`);
     }
   };
 
   const userGroupIds = new Set(userGroups?.map((g) => g.group_id) || []);
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Users</h1>
+        <h1 className="text-2xl font-medium">Users</h1>
         <button
           onClick={() => setShowNewUserForm(true)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          className="px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-hover transition-colors"
         >
           New User
         </button>
@@ -115,8 +116,8 @@ export default function UsersAdminPage() {
 
       {showNewUserForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-96">
-            <h2 className="text-lg font-semibold mb-4">Create New User</h2>
+          <div className="bg-elevated p-6 rounded-lg border border-border w-96">
+            <h2 className="text-lg font-medium mb-4">Create New User</h2>
             <form onSubmit={handleCreateUser} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-1">Name</label>
@@ -124,7 +125,7 @@ export default function UsersAdminPage() {
                   type="text"
                   value={newUserName}
                   onChange={(e) => setNewUserName(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-md"
+                  className="w-full px-3 py-2 bg-input border border-border rounded-md text-primary placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent/50"
                   required
                 />
               </div>
@@ -134,7 +135,7 @@ export default function UsersAdminPage() {
                   type="email"
                   value={newUserEmail}
                   onChange={(e) => setNewUserEmail(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-md"
+                  className="w-full px-3 py-2 bg-input border border-border rounded-md text-primary placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent/50"
                 />
               </div>
               <div>
@@ -142,7 +143,7 @@ export default function UsersAdminPage() {
                 <select
                   value={newUserRole}
                   onChange={(e) => setNewUserRole(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-md"
+                  className="w-full px-3 py-2 bg-input border border-border rounded-md text-primary placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent/50"
                 >
                   <option value="user">User</option>
                   <option value="admin">Admin</option>
@@ -152,13 +153,13 @@ export default function UsersAdminPage() {
                 <button
                   type="button"
                   onClick={() => setShowNewUserForm(false)}
-                  className="flex-1 px-4 py-2 border rounded-md hover:bg-gray-50"
+                  className="flex-1 px-4 py-2 border border-border rounded-md text-muted-foreground hover:bg-subtle hover:text-primary transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  className="flex-1 px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-hover"
                 >
                   Create
                 </button>
@@ -170,17 +171,17 @@ export default function UsersAdminPage() {
 
       {createdToken && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-96">
-            <h2 className="text-lg font-semibold mb-2">User Created</h2>
+          <div className="bg-elevated p-6 rounded-lg border border-border w-96">
+            <h2 className="text-lg font-medium mb-2">User Created</h2>
             <p className="text-sm text-amber-600 mb-4">
               Copy this token now — it won&apos;t be shown again!
             </p>
-            <div className="bg-gray-100 p-3 rounded-md font-mono text-xs break-all mb-4">
+            <div className="bg-input border border-border p-3 rounded-md font-mono text-xs break-all mb-4 text-primary">
               {createdToken}
             </div>
             <button
               onClick={() => setCreatedToken(null)}
-              className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              className="w-full px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-hover"
             >
               Done
             </button>
@@ -190,8 +191,8 @@ export default function UsersAdminPage() {
 
       {managingGroupsFor && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-96 max-h-[80vh] overflow-y-auto">
-            <h2 className="text-lg font-semibold mb-4">
+          <div className="bg-elevated p-6 rounded-lg border border-border w-96 max-h-[80vh] overflow-y-auto">
+            <h2 className="text-lg font-medium mb-4">
               Manage Groups for {managingGroupsFor.name}
             </h2>
             <div className="space-y-2">
@@ -204,14 +205,14 @@ export default function UsersAdminPage() {
                   {userGroupIds.has(group.group_id) ? (
                     <button
                       onClick={() => handleRemoveFromGroup(group.group_id)}
-                      className="text-xs text-red-600 hover:text-red-700"
+                      className="text-xs text-destructive hover:text-red-300 transition-colors"
                     >
                       Remove
                     </button>
                   ) : (
                     <button
                       onClick={() => handleAddToGroup(group.group_id)}
-                      className="text-xs text-blue-600 hover:text-blue-700"
+                      className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
                     >
                       Add
                     </button>
@@ -221,7 +222,7 @@ export default function UsersAdminPage() {
             </div>
             <button
               onClick={() => setManagingGroupsFor(null)}
-              className="w-full mt-4 px-4 py-2 border rounded-md hover:bg-gray-50"
+              className="w-full mt-4 px-4 py-2 border border-border rounded-md text-muted-foreground hover:bg-subtle hover:text-primary transition-colors"
             >
               Close
             </button>
@@ -230,11 +231,14 @@ export default function UsersAdminPage() {
       )}
 
       {isLoading ? (
-        <div>Loading users...</div>
+        <div className="p-8 flex items-center justify-center text-muted-foreground gap-2">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Loading users...
+        </div>
       ) : (
-        <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
+        <div className="bg-elevated rounded-lg border border-border overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-600">
+            <thead className="bg-subtle text-muted-foreground">
               <tr>
                 <th className="px-4 py-3 text-left font-medium">Name</th>
                 <th className="px-4 py-3 text-left font-medium">Email</th>
@@ -244,17 +248,17 @@ export default function UsersAdminPage() {
                 <th className="px-4 py-3 text-left font-medium">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y">
+            <tbody className="divide-y divide-border">
               {users?.map((user) => (
-                <tr key={user.user_id} className="hover:bg-slate-50">
+                <tr key={user.user_id} className="hover:bg-subtle">
                   <td className="px-4 py-3 font-medium">{user.name}</td>
-                  <td className="px-4 py-3 text-slate-500">{user.email || "—"}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{user.email || "—"}</td>
                   <td className="px-4 py-3">
                     <span
                       className={`px-2 py-0.5 rounded text-xs ${
                         user.role === "admin"
-                          ? "bg-purple-100 text-purple-700"
-                          : "bg-slate-100 text-slate-600"
+                          ? "bg-purple-900/40 text-purple-300 border border-purple-800/50"
+                          : "bg-subtle text-muted-foreground"
                       }`}
                     >
                       {user.role}
@@ -264,28 +268,28 @@ export default function UsersAdminPage() {
                     <span
                       className={`px-2 py-0.5 rounded text-xs ${
                         user.is_active
-                          ? "bg-green-100 text-green-700"
-                          : "bg-red-100 text-red-700"
+                          ? "bg-success-dim text-success border border-success/20"
+                          : "bg-destructive-dim text-destructive border border-destructive/20"
                       }`}
                     >
                       {user.is_active ? "Active" : "Inactive"}
                     </span>
                   </td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-500">
+                  <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
                     {truncateId(user.user_id)}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
                       <button
                         onClick={() => setManagingGroupsFor(user)}
-                        className="text-xs text-blue-600 hover:text-blue-700"
+                        className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
                       >
                         Manage Groups
                       </button>
                       {user.is_active && (
                         <button
                           onClick={() => handleDeactivate(user.user_id, user.name)}
-                          className="text-xs text-red-600 hover:text-red-700"
+                          className="text-xs text-destructive hover:text-red-300 transition-colors"
                         >
                           Deactivate
                         </button>
@@ -297,7 +301,7 @@ export default function UsersAdminPage() {
             </tbody>
           </table>
           {users?.length === 0 && (
-            <div className="p-8 text-center text-slate-500">No users</div>
+            <div className="p-8 text-center text-muted-foreground">No users</div>
           )}
         </div>
       )}

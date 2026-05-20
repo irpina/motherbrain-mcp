@@ -13,12 +13,12 @@ export default function AgentsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Agents</h1>
-          <p className="text-slate-500">Manage your agent fleet</p>
+          <h1 className="text-2xl font-medium">Agents</h1>
+          <p className="text-muted-foreground">Manage your agent fleet</p>
         </div>
         <button
           onClick={() => setShowSpawnDialog(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors"
         >
           <Plus size={18} />
           Spawn Agent

@@ -29,26 +29,75 @@ export function getStatusColor(status: string): string {
     case "online":
     case "completed":
     case "active":
-      return "bg-green-100 text-green-700";
+    case "ok":
+      return "bg-success";
     case "offline":
     case "failed":
     case "error":
-      return "bg-red-100 text-red-700";
+      return "bg-danger";
     case "pending":
     case "queued":
-      return "bg-yellow-100 text-yellow-700";
+      return "bg-warning";
     case "running":
     case "in_progress":
-      return "bg-blue-100 text-blue-700";
+      return "bg-blue-500";
     default:
-      return "bg-slate-100 text-slate-600";
+      return "bg-muted-foreground/30";
+  }
+}
+
+export function getStatusBadgeColor(status: string): string {
+  switch (status?.toLowerCase()) {
+    case "online":
+    case "completed":
+    case "active":
+    case "ok":
+      return "bg-success-dim text-success border border-success/20";
+    case "offline":
+    case "failed":
+    case "error":
+      return "bg-destructive-dim text-destructive border border-destructive/20";
+    case "pending":
+    case "queued":
+      return "bg-warning-dim text-warning border border-warning/20";
+    case "running":
+    case "in_progress":
+      return "bg-blue-900/40 text-blue-300 border border-blue-800/50";
+    default:
+      return "bg-subtle text-muted-foreground border border-border";
+  }
+}
+
+export function getTopicBadgeColor(topic: string): string {
+  switch (topic?.toLowerCase()) {
+    case "chat":
+      return "bg-blue-900/40 text-blue-300 border border-blue-800/50";
+    case "heartbeat":
+      return "bg-green-900/40 text-green-300 border border-green-800/50";
+    case "proxy":
+      return "bg-purple-900/40 text-purple-300 border border-purple-800/50";
+    case "system":
+      return "bg-subtle text-muted-foreground border border-border";
+    default:
+      return "bg-subtle text-muted-foreground border border-border";
+  }
+}
+
+export function getProtocolBadgeColor(protocol: string): string {
+  switch (protocol?.toLowerCase()) {
+    case "mcp":
+      return "bg-blue-900/40 text-blue-300 border border-blue-800/50";
+    case "rest":
+      return "bg-purple-900/40 text-purple-300 border border-purple-800/50";
+    default:
+      return "bg-subtle text-muted-foreground border border-border";
   }
 }
 
 export function getPriorityColor(priority: string | number): string {
   const p = typeof priority === "number" ? priority : parseInt(String(priority));
-  if (p >= 8) return "bg-red-100 text-red-700";
-  if (p >= 5) return "bg-orange-100 text-orange-700";
-  if (p >= 3) return "bg-yellow-100 text-yellow-700";
-  return "bg-slate-100 text-slate-600";
+  if (p >= 8) return "bg-destructive-dim text-destructive border border-destructive/20";
+  if (p >= 5) return "bg-orange-900/40 text-orange-300 border border-orange-800/50";
+  if (p >= 3) return "bg-warning-dim text-warning border border-warning/20";
+  return "bg-subtle text-muted-foreground border border-border";
 }

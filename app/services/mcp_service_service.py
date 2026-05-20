@@ -204,10 +204,8 @@ async def mark_stale_services_offline(db: AsyncSession, max_age_seconds: int = 6
     result = await db.execute(
         select(MCPService).where(
             MCPService.status == "online",
-            or_(
-                MCPService.last_heartbeat.is_(None),
-                MCPService.last_heartbeat < cutoff
-            )
+            MCPService.last_heartbeat.isnot(None),
+            MCPService.last_heartbeat < cutoff
         )
     )
     

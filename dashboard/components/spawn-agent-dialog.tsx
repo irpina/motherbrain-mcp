@@ -37,7 +37,7 @@ export function SpawnAgentDialog({ isOpen, onClose }: SpawnAgentDialogProps) {
       setChannel("general");
       setTask("");
     } catch (err: unknown) {
-      alert(`Failed to spawn agent: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(`Failed to spawn agent: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setIsSpawning(false);
     }
@@ -49,9 +49,9 @@ export function SpawnAgentDialog({ isOpen, onClose }: SpawnAgentDialogProps) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-lg w-[28rem] max-h-[90vh] overflow-y-auto">
+      <div className="bg-elevated rounded-lg shadow-lg w-[28rem] max-h-[90vh] overflow-y-auto">
         <div className="p-6">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <h2 className="text-lg font-medium mb-4 flex items-center gap-2">
             <Bot size={20} />
             Spawn Agent
           </h2>
@@ -63,7 +63,7 @@ export function SpawnAgentDialog({ isOpen, onClose }: SpawnAgentDialogProps) {
               <select
                 value={selectedType}
                 onChange={(e) => setSelectedType(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md"
+                className="w-full px-3 py-2 bg-input border border-border rounded-md text-primary placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent/50"
                 required
               >
                 <option value="">Select an agent...</option>
@@ -74,7 +74,7 @@ export function SpawnAgentDialog({ isOpen, onClose }: SpawnAgentDialogProps) {
                 ))}
               </select>
               {selectedAgent && !selectedAgent.has_credentials && (
-                <div className="mt-2 p-2 bg-yellow-50 text-yellow-800 text-sm rounded flex items-start gap-2">
+                <div className="mt-2 p-2 bg-warning-dim text-warning text-sm rounded flex items-start gap-2">
                   <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
                   <span>
                     No API credentials stored for this agent type. Add them in{" "}
@@ -94,11 +94,11 @@ export function SpawnAgentDialog({ isOpen, onClose }: SpawnAgentDialogProps) {
                 type="text"
                 value={channel}
                 onChange={(e) => setChannel(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md"
+                className="w-full px-3 py-2 bg-input border border-border rounded-md text-primary placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent/50"
                 placeholder="general"
                 required
               />
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 The channel the agent will join and monitor
               </p>
             </div>
@@ -111,7 +111,7 @@ export function SpawnAgentDialog({ isOpen, onClose }: SpawnAgentDialogProps) {
               <textarea
                 value={task}
                 onChange={(e) => setTask(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md h-24 resize-none"
+                className="w-full px-3 py-2 bg-input border border-border rounded-md h-24 resize-none text-primary placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent/50"
                 placeholder="E.g., Review the codebase for security issues..."
               />
             </div>
@@ -121,7 +121,7 @@ export function SpawnAgentDialog({ isOpen, onClose }: SpawnAgentDialogProps) {
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 px-4 py-2 border rounded-md hover:bg-slate-50"
+                className="flex-1 px-4 py-2 border rounded-md hover:bg-subtle"
               >
                 Cancel
               </button>
@@ -133,7 +133,7 @@ export function SpawnAgentDialog({ isOpen, onClose }: SpawnAgentDialogProps) {
                   isSpawning ||
                   (selectedAgent && !selectedAgent.has_credentials)
                 }
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isSpawning && <Loader2 size={16} className="animate-spin" />}
                 {isSpawning ? "Spawning..." : "Spawn Agent"}

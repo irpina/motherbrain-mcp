@@ -184,7 +184,7 @@ export const api = {
   claimChatJob: (jobId: string) =>
     request<any>(`/chat/jobs/${jobId}/claim/`, { method: "POST" }),
   completeChatJob: (jobId: string, summary: string) =>
-    request<any>(`/chat/jobs/${jobId}/done/", { method: "POST", body: JSON.stringify({ summary }) }),
+    request<any>(`/chat/jobs/${jobId}/done/`, { method: "POST", body: JSON.stringify({ summary }) }),
 
   // Rules
   listRules: (params?: { status?: string; author?: string; limit?: number }) => {

@@ -12,13 +12,17 @@ interface StatCardProps {
 
 export function StatCard({ title, value, icon, trend, className }: StatCardProps) {
   return (
-    <div className={cn("bg-white rounded-lg border p-4 shadow-sm", className)}>
+    <div className={cn("bg-elevated rounded-lg border border-border p-5", className)}>
       <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500">{title}</p>
-        {icon && <div className="text-slate-400">{icon}</div>}
+        <p className="text-sm text-muted-foreground">{title}</p>
+        {icon && (
+          <div className="bg-accent-dim text-accent p-2 rounded-md">
+            {icon}
+          </div>
+        )}
       </div>
-      <p className="text-2xl font-bold mt-2">{value}</p>
-      {trend && <p className="text-xs text-slate-400 mt-1">{trend}</p>}
+      <p className="text-3xl font-medium text-primary mt-3">{value}</p>
+      {trend && <p className="text-xs text-muted-foreground mt-1.5">{trend}</p>}
     </div>
   );
 }

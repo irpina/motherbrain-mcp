@@ -1,86 +1,84 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo } from "react";
 import { api } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { StatCard } from "@/components/stat-card";
 import { AgentsPanel } from "@/components/agents-panel";
 import { ActivityFeed } from "@/components/activity-feed";
 import { RulesPanel } from "@/components/rules-panel";
-import { CreateJobDialog } from "@/components/create-job-dialog";
 import {
-  Users,
-  Briefcase,
-  Clock,
-  CheckCircle,
-  Plus,
+  Server,
+  Phone,
+  ShieldAlert,
+  Timer,
 } from "lucide-react";
 
 export default function Overview() {
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
 
-  const { data: agents } = useQuery({
-    queryKey: ["agents"],
-    queryFn: api.listAgents,
+  const { data: services } = useQuery({
+    queryKey: ["mcp-services"],
+    queryFn: api.listMCPServices,
+    refetchInterval: 10000,
+  });
+
+  const { data: eventsData } = useQuery({
+    queryKey: ["events", "overview"],
+    queryFn: () => api.listEvents({ limit: 500 }),
     refetchInterval: 5000,
   });
 
-  const { data: jobs } = useQuery({
-    queryKey: ["jobs"],
-    queryFn: () => api.listJobs(),
-    refetchInterval: 5000,
-  });
+  const stats = useMemo(() => {
+    const events = eventsData?.events ?? [];
+    const totalServices = services?.length ?? 0;
+    const onlineServices = services?.filter((s) => s.status === "online").length ?? 0;
+    const totalCalls = events.length;
+    const denials = events.filter((e) => e.status === "error").length;
+    const okEvents = events.filter((e) => e.status === "ok" && typeof e.duration_ms === "number");
+    const avgResponse = okEvents.length > 0
+      ? Math.round(okEvents.reduce((sum, e) => sum + e.duration_ms, 0) / okEvents.length)
+      : 0;
 
-  const stats = {
-    totalAgents: agents?.length ?? 0,
-    onlineAgents:
-      agents?.filter((a) => a.status === "online").length ?? 0,
-    pendingJobs: jobs?.filter((j) => j.status === "pending").length ?? 0,
-    runningJobs: jobs?.filter((j) => j.status === "running").length ?? 0,
-    completedJobs: jobs?.filter((j) => j.status === "completed").length ?? 0,
-    failedJobs: jobs?.filter((j) => j.status === "failed").length ?? 0,
-  };
+    return {
+      totalServices,
+      onlineServices,
+      totalCalls,
+      denials,
+      avgResponse,
+    };
+  }, [services, eventsData]);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Overview</h1>
-          <p className="text-slate-500">Real-time system status</p>
-        </div>
-        <button
-          onClick={() => setIsCreateOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-md hover:bg-slate-800"
-        >
-          <Plus size={18} />
-          New Job
-        </button>
+      <div>
+        <h1 className="text-2xl font-medium">Overview</h1>
+        <p className="text-muted-foreground">Real-time system status</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          title="Total Agents"
-          value={stats.totalAgents}
-          icon={<Users size={20} />}
-          trend={`${stats.onlineAgents} online`}
+          title="Services Online"
+          value={`${stats.onlineServices} / ${stats.totalServices}`}
+          icon={<Server size={20} />}
+          trend={stats.onlineServices === stats.totalServices ? "All healthy" : `${stats.totalServices - stats.onlineServices} offline`}
         />
         <StatCard
-          title="Pending Jobs"
-          value={stats.pendingJobs}
-          icon={<Clock size={20} />}
-          trend="Waiting for agents"
+          title="Calls Today"
+          value={stats.totalCalls}
+          icon={<Phone size={20} />}
+          trend="MCP proxy invocations"
         />
         <StatCard
-          title="Running Jobs"
-          value={stats.runningJobs}
-          icon={<Briefcase size={20} />}
-          trend="In progress"
+          title="Denials"
+          value={stats.denials}
+          icon={<ShieldAlert size={20} />}
+          trend={stats.denials > 0 ? "RBAC or timeout errors" : "No errors"}
         />
         <StatCard
-          title="Completed"
-          value={stats.completedJobs}
-          icon={<CheckCircle size={20} />}
-          trend={`${stats.failedJobs} failed`}
+          title="Avg Response"
+          value={`${stats.avgResponse}ms`}
+          icon={<Timer size={20} />}
+          trend="Successful calls only"
         />
       </div>
 
@@ -90,8 +88,6 @@ export default function Overview() {
       </div>
 
       <RulesPanel />
-
-      <CreateJobDialog isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} />
     </div>
   );
 }

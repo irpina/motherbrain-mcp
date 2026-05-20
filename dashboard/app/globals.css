@@ -3,24 +3,56 @@
 @tailwind utilities;
 
 :root {
-  --background: 0 0% 100%;
-  --foreground: 222.2 84% 4.9%;
-  --card: 0 0% 100%;
-  --card-foreground: 222.2 84% 4.9%;
-  --primary: 222.2 47.4% 11.2%;
-  --primary-foreground: 210 40% 98%;
-  --muted: 210 40% 96.1%;
-  --muted-foreground: 215.4 16.3% 46.9%;
-  --border: 214.3 31.8% 91.4%;
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 210 40% 98%;
+  --bg-base: #0f0f17;
+  --bg-elevated: #1a1a26;
+  --bg-subtle: #232334;
+  --bg-input: #1e1e2e;
+  --border: #2a2a3f;
+  --border-subtle: #1f1f2e;
+
+  --text-primary: #f0ede8;
+  --text-secondary: #8a8898;
+  --text-muted: #55536a;
+
+  --accent: #da7756;
+  --accent-hover: #c96644;
+  --accent-dim: #3d2318;
+
+  --success: #3a9e6e;
+  --success-dim: #0f2e1f;
+  --danger: #c0392b;
+  --danger-dim: #2e0f0f;
+  --warning: #d97706;
+  --warning-dim: #2e1f00;
 }
 
 body {
-  color: hsl(var(--foreground));
-  background: hsl(var(--background));
+  color: var(--text-primary);
+  background: var(--bg-base);
+  font-feature-settings: "rlig" 1, "calt" 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* Scrollbar styling for dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-base);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg-subtle);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3a3a55;
 }

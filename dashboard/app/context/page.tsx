@@ -31,19 +31,19 @@ function SkillRow({ ctx, onEdit, onDelete }: {
     : prompt;
 
   return (
-    <tr className="hover:bg-slate-50">
+    <tr className="hover:bg-subtle">
       <td className="px-4 py-3" colSpan={7}>
         <div className="space-y-2">
           {/* Header row */}
           <div className="flex items-center gap-3 flex-wrap">
             <span className="font-mono text-sm font-medium">{ctx.context_key}</span>
-            <span className="text-xs text-slate-400">•</span>
+            <span className="text-xs text-muted-foreground">•</span>
             {tags.map(tag => (
-              <span key={tag} className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs">
+              <span key={tag} className="px-2 py-0.5 bg-blue-900/40 text-blue-300 rounded text-xs">
                 {tag}
               </span>
             ))}
-            <span className="px-2 py-0.5 bg-slate-200 text-slate-700 rounded text-xs">
+            <span className="px-2 py-0.5 bg-subtle text-primary rounded text-xs">
               {version}
             </span>
             {/* RBAC indicators */}
@@ -53,27 +53,27 @@ function SkillRow({ ctx, onEdit, onDelete }: {
               </span>
             )}
             {ctx.category && (
-              <span className="px-2 py-0.5 bg-purple-100 text-purple-800 rounded text-xs">
+              <span className="px-2 py-0.5 bg-purple-900/40 text-purple-300 rounded text-xs">
                 📁 {ctx.category}
               </span>
             )}
-            <span className="text-xs text-slate-400 ml-auto">
+            <span className="text-xs text-muted-foreground ml-auto">
               {ctx.updated_by} • {formatRelativeTime(ctx.last_updated)}
             </span>
-            <button onClick={onEdit} className="text-blue-600 hover:underline text-xs">
+            <button onClick={onEdit} className="text-blue-400 hover:underline text-xs">
               Edit
             </button>
-            <button onClick={onDelete} className="text-red-600 hover:underline text-xs">
+            <button onClick={onDelete} className="text-destructive hover:underline text-xs">
               Delete
             </button>
           </div>
           {/* Prompt */}
-          <div className="text-sm text-slate-700 bg-slate-50 p-3 rounded">
+          <div className="text-sm text-primary bg-subtle p-3 rounded">
             {truncatedPrompt}
             {prompt.length > 120 && (
               <button 
                 onClick={() => setExpanded(!expanded)}
-                className="text-blue-600 hover:underline text-xs ml-2"
+                className="text-blue-400 hover:underline text-xs ml-2"
               >
                 {expanded ? "show less" : "show more"}
               </button>
@@ -100,7 +100,7 @@ function ContextRow({ ctx, editing, editValue, editServiceId, editCategory, onEd
   onCategoryChange: (v: string) => void;
 }) {
   return (
-    <tr className="hover:bg-slate-50">
+    <tr className="hover:bg-subtle">
       <td className="px-4 py-3 font-mono text-sm">
         {ctx.context_key}
         {/* RBAC indicators */}
@@ -111,7 +111,7 @@ function ContextRow({ ctx, editing, editValue, editServiceId, editCategory, onEd
             </span>
           )}
           {ctx.category && (
-            <span className="px-1.5 py-0.5 bg-purple-100 text-purple-800 rounded text-[10px]">
+            <span className="px-1.5 py-0.5 bg-purple-900/40 text-purple-300 rounded text-[10px]">
               📁 {ctx.category}
             </span>
           )}
@@ -126,13 +126,13 @@ function ContextRow({ ctx, editing, editValue, editServiceId, editCategory, onEd
             className="w-full px-2 py-1 border rounded font-mono text-xs"
           />
         ) : (
-          <pre className="text-xs bg-slate-100 p-2 rounded overflow-x-auto">
+          <pre className="text-xs bg-subtle p-2 rounded overflow-x-auto">
             {JSON.stringify(ctx.value, null, 2)}
           </pre>
         )}
       </td>
       <td className="px-4 py-3">{ctx.updated_by}</td>
-      <td className="px-4 py-3 text-slate-500">
+      <td className="px-4 py-3 text-muted-foreground">
         {formatRelativeTime(ctx.last_updated)}
       </td>
       <td className="px-4 py-3">
@@ -153,14 +153,14 @@ function ContextRow({ ctx, editing, editValue, editServiceId, editCategory, onEd
               className="w-full px-2 py-1 border rounded text-xs"
             />
             <div className="flex gap-2">
-              <button onClick={onSave} className="text-green-600 hover:underline text-xs">Save</button>
-              <button onClick={onCancel} className="text-slate-500 hover:underline text-xs">Cancel</button>
+              <button onClick={onSave} className="text-success hover:underline text-xs">Save</button>
+              <button onClick={onCancel} className="text-muted-foreground hover:underline text-xs">Cancel</button>
             </div>
           </div>
         ) : (
           <div className="flex gap-2">
-            <button onClick={onEdit} className="text-blue-600 hover:underline text-xs">Edit</button>
-            <button onClick={onDelete} className="text-red-600 hover:underline text-xs">Delete</button>
+            <button onClick={onEdit} className="text-blue-400 hover:underline text-xs">Edit</button>
+            <button onClick={onDelete} className="text-destructive hover:underline text-xs">Delete</button>
           </div>
         )}
       </td>
@@ -234,7 +234,7 @@ export default function ContextPage() {
       queryClient.invalidateQueries({ queryKey: ["context"] });
       setEditingKey(null);
     } catch (e) {
-      alert("Invalid JSON: " + (e as Error).message);
+      console.error("Invalid JSON:", (e as Error).message);
     }
   };
 
@@ -262,7 +262,7 @@ export default function ContextPage() {
       setNewServiceId("");
       setNewCategory("");
     } catch (e) {
-      alert("Invalid JSON: " + (e as Error).message);
+      console.error("Invalid JSON:", (e as Error).message);
     }
   };
 
@@ -272,15 +272,15 @@ export default function ContextPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Project Context</h1>
-          <p className="text-slate-500">Shared key-value store for agents with RBAC</p>
+          <h1 className="text-2xl font-medium">Project Context</h1>
+          <p className="text-muted-foreground">Shared key-value store for agents with RBAC</p>
         </div>
         <div className="flex items-center gap-3">
           {/* Category filter */}
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
-            className="px-3 py-2 border rounded-md text-sm"
+            className="px-3 py-2 bg-input border border-border rounded-md text-sm text-primary focus:outline-none focus:ring-1 focus:ring-accent/50"
           >
             <option value="all">All Categories</option>
             {categories.map(cat => (
@@ -293,15 +293,15 @@ export default function ContextPage() {
             onClick={() => setShowSkillsOnly(!showSkillsOnly)}
             className={`px-4 py-2 rounded-md text-sm border transition-colors ${
               showSkillsOnly
-                ? "bg-blue-600 text-white border-blue-600"
-                : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                ? "bg-accent text-white border-accent"
+                : "bg-elevated text-primary border-border hover:bg-subtle"
             }`}
           >
             {showSkillsOnly ? "Showing Skills" : "Show All"}
           </button>
           <button
             onClick={() => setIsAdding(true)}
-            className="px-4 py-2 bg-slate-900 text-white rounded-md hover:bg-slate-800"
+            className="px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-hover"
           >
             Add Key
           </button>
@@ -309,14 +309,14 @@ export default function ContextPage() {
       </div>
 
       {isAdding && (
-        <div className="bg-white p-4 rounded-lg border shadow-sm space-y-4">
+        <div className="bg-elevated p-4 rounded-lg border border-border space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1">Key</label>
             <input
               type="text"
               value={newKey}
               onChange={(e) => setNewKey(e.target.value)}
-              className="w-full px-3 py-2 border rounded-md"
+              className="w-full px-3 py-2 bg-input border border-border rounded-md text-primary placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent/50"
               placeholder="e.g., skills.my_skill or config.api_url"
             />
           </div>
@@ -326,7 +326,7 @@ export default function ContextPage() {
               value={newValue}
               onChange={(e) => setNewValue(e.target.value)}
               rows={6}
-              className="w-full px-3 py-2 border rounded-md font-mono text-sm"
+              className="w-full px-3 py-2 bg-input border border-border rounded-md font-mono text-sm text-primary placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent/50"
               placeholder='{"prompt": "...", "tags": ["tag1"], "version": "v1.0"}'
             />
           </div>
@@ -336,33 +336,33 @@ export default function ContextPage() {
               type="text"
               value={newDescription}
               onChange={(e) => setNewDescription(e.target.value)}
-              className="w-full px-3 py-2 border rounded-md"
+              className="w-full px-3 py-2 bg-input border border-border rounded-md text-primary placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent/50"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">
                 Service ID (optional)
-                <span className="text-slate-400 font-normal ml-1">— Restrict to users with permission</span>
+                <span className="text-muted-foreground font-normal ml-1">— Restrict to users with permission</span>
               </label>
               <input
                 type="text"
                 value={newServiceId}
                 onChange={(e) => setNewServiceId(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md"
+                className="w-full px-3 py-2 bg-input border border-border rounded-md text-primary placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent/50"
                 placeholder="e.g., agentchattr-mcp"
               />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">
                 Category (optional)
-                <span className="text-slate-400 font-normal ml-1">— For UI organization</span>
+                <span className="text-muted-foreground font-normal ml-1">— For UI organization</span>
               </label>
               <input
                 type="text"
                 value={newCategory}
                 onChange={(e) => setNewCategory(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md"
+                className="w-full px-3 py-2 bg-input border border-border rounded-md text-primary placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent/50"
                 placeholder="e.g., devops, onboarding"
               />
             </div>
@@ -370,13 +370,13 @@ export default function ContextPage() {
           <div className="flex gap-2">
             <button
               onClick={() => setIsAdding(false)}
-              className="px-4 py-2 border rounded-md hover:bg-slate-50"
+              className="px-4 py-2 border rounded-md hover:bg-subtle"
             >
               Cancel
             </button>
             <button
               onClick={handleAdd}
-              className="px-4 py-2 bg-slate-900 text-white rounded-md hover:bg-slate-800"
+              className="px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-hover"
             >
               Save
             </button>
@@ -384,9 +384,9 @@ export default function ContextPage() {
         </div>
       )}
 
-      <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
+      <div className="bg-elevated rounded-lg border-border overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-slate-600">
+          <thead className="bg-subtle text-muted-foreground">
             {!showSkillsOnly && (
               <tr>
                 <th className="px-4 py-3 text-left font-medium">Key</th>
@@ -401,7 +401,7 @@ export default function ContextPage() {
                 <th className="px-4 py-3 text-left font-medium" colSpan={7}>
                   Skills ({filteredContexts?.length || 0})
                   {categoryFilter !== "all" && (
-                    <span className="ml-2 text-slate-400 font-normal">
+                    <span className="ml-2 text-muted-foreground font-normal">
                       — filtered by category: {categoryFilter}
                     </span>
                   )}
@@ -445,9 +445,12 @@ export default function ContextPage() {
           </tbody>
         </table>
         {filteredContexts?.length === 0 && (
-          <div className="p-8 text-center text-slate-500">
-            {showSkillsOnly ? "No skills found" : "No context keys"}
-            {categoryFilter !== "all" && " in this category"}
+          <div className="p-8 text-center text-muted-foreground text-sm">
+            <p className="font-medium text-primary mb-1">
+              {showSkillsOnly ? "No skills found" : "No context keys"}
+              {categoryFilter !== "all" && " in this category"}
+            </p>
+            <p className="text-xs">Click Add Key to create a new entry. Context is shared across all agents.</p>
           </div>
         )}
       </div>

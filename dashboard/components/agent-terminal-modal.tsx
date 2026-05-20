@@ -71,8 +71,10 @@ export function AgentTerminalModal({
         fitAddonRef.current = fitAddon;
 
         // Open terminal in container
-        terminal.open(terminalRef.current);
-        fitAddon.fit();
+        if (terminalRef.current) {
+          terminal.open(terminalRef.current);
+          fitAddon.fit();
+        }
 
         // Connect WebSocket (direct to API port, not through proxy)
         const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -141,19 +143,19 @@ export function AgentTerminalModal({
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-[#1e1e1e] rounded-lg shadow-lg w-[90vw] h-[80vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <div className="flex items-center gap-2 text-white">
             <TerminalIcon size={18} />
             <span className="font-medium">
               {agentType} - {containerId}
             </span>
             {isConnecting && (
-              <Loader2 size={16} className="animate-spin text-slate-400" />
+              <Loader2 size={16} className="animate-spin text-muted-foreground" />
             )}
           </div>
           <button
             onClick={onClose}
-            className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded"
+            className="p-1 text-muted-foreground hover:text-white hover:bg-subtle rounded"
           >
             <X size={18} />
           </button>
@@ -171,7 +173,7 @@ export function AgentTerminalModal({
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-2 border-t border-slate-700 text-xs text-slate-400">
+        <div className="px-4 py-2 border-t border-border text-xs text-muted-foreground">
           Press Ctrl+C to send interrupt • Type &apos;exit&apos; to close shell
         </div>
       </div>

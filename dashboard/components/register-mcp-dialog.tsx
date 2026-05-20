@@ -68,13 +68,13 @@ export function RegisterMCPDialog({ isOpen, onClose }: RegisterMCPDialogProps) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-lg w-full max-w-md">
+      <div className="bg-elevated rounded-lg shadow-lg w-full max-w-md">
         <div className="px-4 py-3 border-b">
-          <h2 className="text-lg font-semibold">Register MCP Service</h2>
+          <h2 className="text-lg font-medium">Register MCP Service</h2>
         </div>
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded text-red-600 text-sm">
+            <div className="p-3 bg-destructive-dim border border-destructive/20 rounded text-destructive text-sm">
               {error}
             </div>
           )}
@@ -85,7 +85,7 @@ export function RegisterMCPDialog({ isOpen, onClose }: RegisterMCPDialogProps) {
               value={serviceId}
               onChange={(e) => setServiceId(e.target.value)}
               placeholder="e.g., code-gen-mcp"
-              className="w-full px-3 py-2 border rounded-md text-sm"
+              className="w-full px-3 py-2 bg-input border border-border rounded-md text-sm text-primary placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent/50"
               required
             />
           </div>
@@ -96,7 +96,7 @@ export function RegisterMCPDialog({ isOpen, onClose }: RegisterMCPDialogProps) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g., Code Generation Service"
-              className="w-full px-3 py-2 border rounded-md text-sm"
+              className="w-full px-3 py-2 bg-input border border-border rounded-md text-sm text-primary placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent/50"
               required
             />
           </div>
@@ -107,20 +107,20 @@ export function RegisterMCPDialog({ isOpen, onClose }: RegisterMCPDialogProps) {
               value={endpoint}
               onChange={(e) => setEndpoint(e.target.value)}
               placeholder="http://localhost:8001"
-              className="w-full px-3 py-2 border rounded-md text-sm font-mono"
+              className="w-full px-3 py-2 bg-input border border-border rounded-md text-sm font-mono text-primary placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent/50"
               required
             />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">
-              Capabilities <span className="text-slate-400 font-normal">(comma-separated)</span>
+              Capabilities <span className="text-muted-foreground font-normal">(comma-separated)</span>
             </label>
             <input
               type="text"
               value={capabilities}
               onChange={(e) => setCapabilities(e.target.value)}
               placeholder="e.g., generate_code, python"
-              className="w-full px-3 py-2 border rounded-md text-sm"
+              className="w-full px-3 py-2 bg-input border border-border rounded-md text-sm text-primary placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent/50"
             />
           </div>
           <div>
@@ -128,7 +128,7 @@ export function RegisterMCPDialog({ isOpen, onClose }: RegisterMCPDialogProps) {
             <select
               value={protocol}
               onChange={(e) => setProtocol(e.target.value)}
-              className="w-full px-3 py-2 border rounded-md text-sm"
+              className="w-full px-3 py-2 bg-input border border-border rounded-md text-sm text-primary placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent/50"
             >
               <option value="rest">REST (POST /execute)</option>
               <option value="mcp">MCP (JSON-RPC /mcp)</option>
@@ -136,28 +136,28 @@ export function RegisterMCPDialog({ isOpen, onClose }: RegisterMCPDialogProps) {
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">
-              API Key <span className="text-slate-400 font-normal">(optional)</span>
+              API Key <span className="text-muted-foreground font-normal">(optional)</span>
             </label>
             <input
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder="Leave blank if not required"
-              className="w-full px-3 py-2 border rounded-md text-sm"
+              className="w-full px-3 py-2 bg-input border border-border rounded-md text-sm text-primary placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent/50"
             />
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
               onClick={handleClose}
-              className="px-4 py-2 text-sm border rounded-md hover:bg-slate-50"
+              className="px-4 py-2 text-sm border rounded-md hover:bg-subtle"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-4 py-2 text-sm bg-slate-900 text-white rounded-md hover:bg-slate-800 disabled:opacity-50"
+              className="px-4 py-2 text-sm bg-accent text-white rounded-md hover:bg-accent-hover disabled:opacity-50"
             >
               {isSubmitting ? "Registering..." : "Register"}
             </button>

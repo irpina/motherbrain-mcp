@@ -6,8 +6,8 @@ export default function MCPPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">MCP Services</h1>
-        <p className="text-slate-500">Register and monitor MCP service endpoints</p>
+        <h1 className="text-2xl font-medium">MCP Services</h1>
+        <p className="text-muted-foreground">Register and monitor MCP service endpoints</p>
       </div>
       <MCPServicesPanel />
     </div>

@@ -63,7 +63,6 @@ async def get_system_state(db: AsyncSession, action_limit: int = 20) -> dict:
             "platform": agent.platform,
             "status": "online" if is_online else agent.status,
             "capabilities": agent.capabilities or {},
-            "current_job": agent.current_job,
             "last_heartbeat": agent.last_heartbeat.isoformat() if agent.last_heartbeat else None,
         })
     

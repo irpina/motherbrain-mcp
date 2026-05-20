@@ -1,21 +1,51 @@
-# Motherbrain MCP
+# Motherbrain
 
-> A self-hosted MCP hub that connects AI agents to services, routes jobs, and logs everything — in one `docker compose up`.
+A self-hosted MCP gateway for production AI agents.  
+Audit logging. RBAC. Capability discovery. One endpoint.
 
-## What is Motherbrain?
+```bash
+docker compose up -d && make demo
+```
 
-Motherbrain is a coordination hub for AI agents. Connect any MCP-compatible LLM client (Claude Desktop, etc.) to a single endpoint and get:
+<!-- Screenshot or GIF here -->
 
-- **Unified MCP proxy** — one endpoint, all your registered services
-- **RBAC permission system** — users, groups, and per-service access control
-- **Live event log** — every tool call logged with caller identity, args, response, duration
-- **Service health monitoring** — auto-probes registered services every 30s with capability auto-discovery
-- **Job dispatch** — create and track jobs routed to specific agents or services
-- **Shared context/skill store** — key-value store for prompts, skills, shared state
-- **Agent registry** — register agents, deliver triggers via heartbeat
-- **Next.js dashboard** — real-time view of services, agents, jobs, activity, and admin controls
+---
 
-## Quick Start
+## The Problem
+
+You're running AI agents in production. They're calling MCP tools. You have no idea what they're doing, who's authorized to call what, or how to audit any of it.
+
+Raw MCP has no access control, no audit trail, and no health monitoring. Every agent connects directly to every service. When something breaks, you have no logs. When someone calls a tool they shouldn't, you have no guardrails.
+
+## The Answer
+
+Motherbrain is a gateway that sits between your agents and your MCP services. Every tool call is logged. Access is controlled by RBAC groups. Services are health-monitored. You get a dashboard.
+
+One endpoint. Full visibility. Controlled access.
+
+## Why Motherbrain?
+
+| Raw MCP | Motherbrain |
+|---|---|
+| No audit log | Full event log — every call with args, response, agent, duration |
+| No access control | Users + groups + per-service permissions |
+| No observability | Health monitoring, latency tracking, denial logging |
+| Direct service connections | Single gateway endpoint — agents talk to one URL |
+
+## Features
+
+### Audit & Compliance
+Every tool call is logged with full context: caller identity, arguments, response, status, and duration. Search and filter by service, agent, tool, or topic.
+
+### RBAC
+Users belong to groups. Groups grant access to specific MCP services. Unauthorized calls are denied and logged. Admin users bypass all checks for emergency access.
+
+### Service Health
+30-second HTTP probes on every registered service. Online/offline status in the dashboard. Last heartbeat tracked per service.
+
+---
+
+## Quickstart
 
 Prerequisites: Docker + Docker Compose
 
@@ -24,15 +54,57 @@ git clone https://github.com/irpina/motherbrain-mcp.git
 cd motherbrain-mcp
 cp .env.example .env
 docker compose up -d
+make demo        # seed realistic demo data
 ```
 
-- API: http://localhost:8000
-- Dashboard: http://localhost:3000
-- MCP endpoint: http://localhost:8000/mcp
+- **Dashboard:** http://localhost:3000
+- **API docs:** http://localhost:8000/docs
+- **MCP endpoint:** http://localhost:8000/mcp
+
+The demo seeds 4 MCP services, 3 users with RBAC groups, 80+ gateway events (including a denial arc), agents, jobs, and rules. The Overview page shows gateway metrics: Services Online, Calls Today, Denials, Avg Response.
+
+## Architecture
+
+```
+┌─────────┐     ┌─────────────┐     ┌─────────────────────────────┐
+│  Agent  │────→│ Motherbrain │────→│  filesystem  (read_file…)   │
+│ (Claude │     │   Gateway   │     │  github      (get_pr…)      │
+│  Desktop│     │             │     │  web-fetch   (fetch_url…)   │
+│  etc.)  │     │  • Audit    │     │  internal-api (offline)     │
+└─────────┘     │  • RBAC     │     └─────────────────────────────┘
+                │  • Health   │
+                └─────────────┘
+                       │
+                       ↓
+                ┌─────────────┐
+                │  Dashboard  │
+                │  (Next.js)  │
+                └─────────────┘
+```
+
+Agents connect to one endpoint. Motherbrain routes calls, enforces permissions, logs everything, and exposes a real-time dashboard.
+
+*The services above are seeded by `make demo`. Register your own with `POST /mcp/register`.*
+
+## Registering an MCP Service
+
+```bash
+# Set API_KEY in your .env file
+curl -X POST http://localhost:8000/mcp/register \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -d '{
+    "service_id": "my-service",
+    "name": "My MCP Service",
+    "endpoint": "http://host.docker.internal:8010"
+  }'
+```
+
+Motherbrain registers the service, begins health-probing every 30 seconds, and lists it in the gateway dashboard.
 
 ## Connecting an LLM Client
 
-Add Motherbrain to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+Add Motherbrain to your Claude Desktop config:
 
 ```json
 {
@@ -44,11 +116,7 @@ Add Motherbrain to your Claude Desktop config (`~/Library/Application Support/Cl
 }
 ```
 
-Restart Claude Desktop. Call `discover()` — Motherbrain introduces itself and walks you through the system.
-
-### With User Token (RBAC)
-
-If you've enabled the permission system, pass your user token via header:
+With RBAC enabled, pass your user token:
 
 ```json
 {
@@ -63,126 +131,30 @@ If you've enabled the permission system, pass your user token via header:
 }
 ```
 
-Alternatively, call `authenticate(token)` from within a session to bind your identity.
-
-## MCP Tools
-
-| Tool | Description |
-|------|-------------|
-| `discover()` | Live orientation — services, agents online, how-to |
-| `get_system_state()` | Raw JSON system state |
-| `list_tools(service_id)` | List tools on a registered service |
-| `call_tool(service_id, tool_name, arguments)` | Proxy a call to any registered service |
-| `register_service(service_id, name, endpoint, api_key?)` | Register an MCP service — auto-discovers capabilities |
-| `remove_service(service_id)` | Deregister a service |
-| `create_job(type, payload, requirements?, priority?, assigned_agent?)` | Dispatch a job to an agent |
-| `get_job_status(job_id)` | Check job status and result |
-| `authenticate(token)` | Bind a user token to the current session (RBAC) |
-| `get_event_log(limit, since_id, topic, service_id)` | Read the unified audit log |
-| `get_context(key)` | Fetch a value or skill from the context store |
-| `set_context(key, value_json, description)` | Store a value or skill |
-
 ## Permission System (RBAC)
 
-Motherbrain includes a full role-based access control system for scoping which MCP services each user can access.
-
-**Concepts:**
-- **Users** — identified by `mb_` prefixed tokens (SHA-256 hashed in DB). Roles: `user` or `admin`.
+- **Users** — `user` or `admin` role. Identified by tokens (SHA-256 hashed in DB).
 - **Groups** — named collections with an `allowed_service_ids` list.
-- **Membership** — users belong to groups; groups grant access to services.
-- **Admin bypass** — admin-role users can call any service regardless of group membership.
+- **Membership** — users belong to groups; groups grant service access.
+- **Admin bypass** — admins can call any service regardless of group.
 
-**Setup via API:**
+Manage users and groups via the **Admin** section of the dashboard or the REST API.
 
-```bash
-# Create a user (returns one-time token)
-curl -X POST http://localhost:8000/admin/users \
-  -H "X-API-Key: supersecret" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Alice", "email": "alice@example.com", "role": "user"}'
+---
 
-# Create a group scoped to a service
-curl -X POST http://localhost:8000/admin/groups \
-  -H "X-API-Key: supersecret" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "dev-team", "allowed_service_ids": ["filesystem", "fetch"]}'
+## Also Included
 
-# Add user to group
-curl -X POST http://localhost:8000/admin/users/{user_id}/groups/{group_id} \
-  -H "X-API-Key: supersecret"
-```
+Motherbrain also includes agent orchestration, job dispatch, a shared context/skill store, and agent chat — see the API docs at `/docs` for the full feature set.
 
-Users and groups can also be managed via the **Admin** section of the dashboard.
+## Tech Stack
 
-## Registering an External MCP Service
-
-```bash
-curl -X POST http://localhost:8000/mcp/register \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: supersecret" \
-  -d '{
-    "service_id": "my-service",
-    "name": "My MCP Service",
-    "endpoint": "http://host.docker.internal:8010"
-  }'
-```
-
-Motherbrain performs a full MCP handshake to auto-discover the service's capabilities, then health-probes it every 30s.
-
-## Agent Registration & Heartbeat
-
-Agents register with Motherbrain and poll for triggers:
-
-```bash
-# Register
-curl -X POST http://localhost:8000/agents/register \
-  -H "X-API-Key: supersecret" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "my-agent", "platform": "python", "capabilities": {}}'
-
-# Heartbeat (every 30s) — returns any pending triggers
-curl -X POST http://localhost:8000/api/heartbeat/my-agent?agent_id=YOUR_ID
-```
-
-## Architecture
-
-```
-motherbrain-mcp/
-├── app/
-│   ├── mcp_server.py        # FastMCP server — 12 MCP tools at /mcp
-│   ├── main.py              # FastAPI entry point + lifespan
-│   ├── middleware/
-│   │   └── mcp_auth.py      # X-User-Token header extraction (ContextVar)
-│   ├── api/routes/
-│   │   ├── admin.py         # /admin/users + /admin/groups (API key required)
-│   │   └── ...              # agents, jobs, context, events, mcp, system
-│   ├── background/
-│   │   ├── heartbeat.py     # Agent liveness checker
-│   │   └── health_check.py  # Service health prober (30s)
-│   ├── models/              # SQLAlchemy ORM models (agents, jobs, users, groups)
-│   ├── schemas/             # Pydantic schemas
-│   ├── services/
-│   │   ├── user_service.py      # User CRUD + token management
-│   │   ├── group_service.py     # Group CRUD
-│   │   ├── permission_service.py # RBAC check_permission()
-│   │   └── ...                  # agent, job, mcp_proxy, dispatcher
-│   └── db/                  # Async PostgreSQL session (asyncpg)
-├── dashboard/               # Next.js frontend (port 3000)
-│   └── app/admin/           # Users + Groups management pages
-├── alembic/                 # DB migrations (auto-applied on startup)
-├── mock_mcp_server/         # Test MCP server for local dev (port 8001)
-├── docker-compose.yml
-├── Dockerfile
-└── .env.example
-```
-
-## Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql+asyncpg://postgres:postgres@db:5432/motherbrain` |
-| `REDIS_URL` | Redis connection string | `redis://redis:6379` |
-| `API_KEY` | Master API key (change in production) | `supersecret` |
+| Layer | Tech |
+|---|---|
+| Gateway | FastAPI + FastMCP |
+| Dashboard | Next.js 15 + Tailwind CSS |
+| Database | PostgreSQL 15 (asyncpg) |
+| Cache / Queue | Redis 7 |
+| Migrations | Alembic (auto-applied on startup) |
 
 ## Development
 
@@ -191,19 +163,16 @@ make up      # Start all services
 make down    # Stop
 make logs    # Follow logs
 make shell   # Shell into API container
+make demo    # Seed demo data
 ```
 
-Mock MCP server for testing without external services:
-```bash
-cd mock_mcp_server && python main.py  # Runs on port 8001
-```
+## Environment Variables
 
-Database migrations:
-```bash
-alembic revision -m "description"   # Create
-alembic upgrade head                 # Apply
-alembic downgrade -1                 # Rollback
-```
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DATABASE_URL` | PostgreSQL connection string | `postgresql+asyncpg://postgres:postgres@db:5432/motherbrain` |
+| `REDIS_URL` | Redis connection string | `redis://redis:6379` |
+| `API_KEY` | Master API key — **change before any deployment** | *(required)* |
 
 ## License
 

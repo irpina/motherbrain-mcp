@@ -2,16 +2,14 @@
 
 import { api } from "@/lib/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  formatRelativeTime,
-  truncateId,
-} from "@/lib/utils";
+import { formatRelativeTime, truncateId } from "@/lib/utils";
+import { Loader2 } from "lucide-react";
 
-const presenceColors: Record<string, string> = {
-  active: "bg-green-100 text-green-800",
-  idle: "bg-yellow-100 text-yellow-800",
-  away: "bg-slate-100 text-slate-600",
-  registered: "bg-blue-50 text-blue-600",
+const presenceBadgeColors: Record<string, string> = {
+  active: "bg-success-dim text-success border border-success/20",
+  idle: "bg-warning-dim text-warning border border-warning/20",
+  away: "bg-subtle text-muted-foreground border border-border",
+  registered: "bg-blue-900/40 text-blue-300 border border-blue-800/50",
 };
 
 const presenceLabels: Record<string, string> = {
@@ -36,22 +34,32 @@ export function AgentsPanel() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       queryClient.invalidateQueries({ queryKey: ["agents"] });
     } catch (err) {
-      alert(`Failed to remove agent: ${err}`);
+      console.error("Failed to remove agent:", err);
     }
   };
 
   if (isLoading) {
-    return <div className="p-4">Loading agents...</div>;
+    return (
+      <div className="bg-elevated rounded-lg border border-border overflow-hidden">
+        <div className="px-4 py-3 border-b border-border bg-subtle">
+          <h2 className="font-medium text-[15px]">Agents</h2>
+        </div>
+        <div className="p-8 flex items-center justify-center text-muted-foreground gap-2">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Loading agents...
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
-      <div className="px-4 py-3 border-b bg-slate-50">
-        <h2 className="font-semibold">Agents</h2>
+    <div className="bg-elevated rounded-lg border border-border overflow-hidden">
+      <div className="px-4 py-3 border-b border-border bg-subtle">
+        <h2 className="font-medium text-[15px]">Agents</h2>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-slate-600">
+          <thead className="bg-elevated text-muted-foreground border-b border-border">
             <tr>
               <th className="px-4 py-2 text-left font-medium">Presence</th>
               <th className="px-4 py-2 text-left font-medium">Name</th>
@@ -62,7 +70,7 @@ export function AgentsPanel() {
               <th className="px-4 py-2 text-left font-medium">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y">
+          <tbody className="divide-y divide-border">
             {agents?.map((agent) => {
               const displayName = agent.name
                 ? agent.hostname
@@ -72,19 +80,19 @@ export function AgentsPanel() {
               const presence = agent.presence || "registered";
 
               return (
-                <tr key={agent.agent_id} className="hover:bg-slate-50">
+                <tr key={agent.agent_id} className="hover:bg-subtle/50 transition-colors">
                   <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 rounded text-xs ${presenceColors[presence] ?? "bg-slate-100 text-slate-600"}`}>
+                    <span className={`px-2 py-0.5 rounded text-xs ${presenceBadgeColors[presence] ?? "bg-subtle text-muted-foreground border border-border"}`}>
                       {presenceLabels[presence] ?? presence}
                     </span>
                   </td>
-                  <td className="px-4 py-3 font-medium">
+                  <td className="px-4 py-3 font-medium text-primary">
                     {displayName}
                   </td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-500">
+                  <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
                     {truncateId(agent.agent_id)}
                   </td>
-                  <td className="px-4 py-3">{agent.platform}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{agent.platform}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
                       {Object.entries(agent.capabilities)
@@ -92,20 +100,20 @@ export function AgentsPanel() {
                         .map(([key]) => (
                           <span
                             key={key}
-                            className="px-2 py-0.5 bg-slate-100 rounded text-xs"
+                            className="px-2 py-0.5 bg-subtle border border-border rounded text-xs text-muted-foreground"
                           >
                             {key}
                           </span>
                         ))}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-slate-500">
+                  <td className="px-4 py-3 text-muted-foreground text-xs">
                     {agent.last_heartbeat ? formatRelativeTime(agent.last_heartbeat) : "Never"}
                   </td>
                   <td className="px-4 py-3">
                     <button
                       onClick={() => handleRemove(agent.agent_id, displayName)}
-                      className="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors"
+                      className="px-2 py-1 text-xs bg-destructive-dim text-destructive border border-destructive/20 rounded hover:bg-destructive/20 transition-colors"
                     >
                       Remove
                     </button>
@@ -116,7 +124,10 @@ export function AgentsPanel() {
           </tbody>
         </table>
         {agents?.length === 0 && (
-          <div className="p-8 text-center text-slate-500">No agents registered</div>
+          <div className="p-8 text-center text-muted-foreground text-sm">
+            <p className="font-medium text-primary mb-1">No agents registered</p>
+            <p className="text-xs">Agents self-register via the /agents/register API endpoint.</p>
+          </div>
         )}
       </div>
     </div>

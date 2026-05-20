@@ -59,7 +59,7 @@ export default function ChatPage() {
       setShowNewChannel(false);
       queryClient.invalidateQueries({ queryKey: ["chat", "channels"] });
     } catch (err: unknown) {
-      alert(`Failed to create channel: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(`Failed to create channel: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -131,15 +131,15 @@ export default function ChatPage() {
       await api.postMessage(selectedChannel, "admin", messageInput.trim());
       setMessageInput("");
     } catch (err: unknown) {
-      alert(`Failed to send: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(`Failed to send: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
   // Get sender color based on name hash
   const getSenderColor = (name: string) => {
     const colors = [
-      "text-blue-600 bg-blue-50",
-      "text-green-600 bg-green-50",
+      "text-blue-400 bg-blue-900/40",
+      "text-success bg-success-dim",
       "text-purple-600 bg-purple-50",
       "text-orange-600 bg-orange-50",
       "text-pink-600 bg-pink-50",
@@ -159,13 +159,13 @@ export default function ChatPage() {
   return (
     <div className="flex h-[calc(100vh-4rem)]">
       {/* Sidebar */}
-      <div className="w-64 bg-slate-50 border-r flex flex-col">
+      <div className="w-64 bg-subtle border-r flex flex-col">
         <div className="p-4 border-b">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold">Channels</h2>
+            <h2 className="font-medium">Channels</h2>
             <button
               onClick={() => setShowNewChannel(true)}
-              className="p-1 hover:bg-slate-200 rounded"
+              className="p-1 hover:bg-subtle rounded"
             >
               <Plus size={18} />
             </button>
@@ -177,48 +177,51 @@ export default function ChatPage() {
             <button
               key={channel.id}
               onClick={() => setSelectedChannel(channel.name)}
-              className={`w-full text-left px-4 py-2 hover:bg-slate-100 flex items-center gap-2 ${
-                selectedChannel === channel.name ? "bg-slate-200" : ""
+              className={`w-full text-left px-4 py-2 hover:bg-subtle flex items-center gap-2 ${
+                selectedChannel === channel.name ? "bg-subtle" : ""
               }`}
             >
               {channel.private ? (
-                <Lock size={16} className="text-slate-400" />
+                <Lock size={16} className="text-muted-foreground" />
               ) : (
-                <MessageSquare size={16} className="text-slate-400" />
+                <MessageSquare size={16} className="text-muted-foreground" />
               )}
               <span className="truncate">{channel.name}</span>
               {channel.private && (
-                <span className="ml-auto text-[10px] text-slate-400">private</span>
+                <span className="ml-auto text-[10px] text-muted-foreground">private</span>
               )}
             </button>
           ))}
           {channels?.length === 0 && (
-            <div className="p-4 text-sm text-slate-400">No channels yet</div>
+            <div className="p-4 text-sm text-muted-foreground text-center">
+              <p className="font-medium text-primary mb-1">No channels yet</p>
+              <p className="text-xs">Click + to create a channel for agent collaboration.</p>
+            </div>
           )}
         </div>
 
         {showNewChannel && (
-          <div className="p-4 border-t bg-white">
+          <div className="p-4 border-t border-border bg-elevated">
             <form onSubmit={handleCreateChannel}>
               <input
                 type="text"
                 value={newChannelName}
                 onChange={(e) => setNewChannelName(e.target.value)}
                 placeholder="Channel name"
-                className="w-full px-3 py-2 border rounded text-sm mb-2"
+                className="w-full px-3 py-2 bg-input border border-border rounded text-sm text-primary placeholder:text-muted-foreground mb-2 focus:outline-none focus:ring-1 focus:ring-accent/50"
                 autoFocus
               />
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => setShowNewChannel(false)}
-                  className="flex-1 px-3 py-1 text-sm border rounded hover:bg-slate-50"
+                  className="flex-1 px-3 py-1 text-sm border rounded hover:bg-subtle"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+                  className="flex-1 px-3 py-1 text-sm bg-accent text-white rounded hover:bg-accent-hover"
                 >
                   Create
                 </button>
@@ -235,9 +238,9 @@ export default function ChatPage() {
             {/* Header */}
             <div className="px-4 py-3 border-b flex items-center justify-between">
               <div>
-                <h3 className="font-semibold">#{selectedChannel}</h3>
-                <div className="text-xs text-slate-400 flex items-center gap-2">
-                  <span className={wsConnected ? "text-green-500" : "text-red-500"}>
+                <h3 className="font-medium">#{selectedChannel}</h3>
+                <div className="text-xs text-muted-foreground flex items-center gap-2">
+                  <span className={wsConnected ? "text-green-500" : "text-destructive"}>
                     ● {wsConnected ? "Connected" : "Disconnected"}
                   </span>
                 </div>
@@ -245,12 +248,12 @@ export default function ChatPage() {
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => setShowJobsPanel(!showJobsPanel)}
-                  className={`p-2 rounded ${showJobsPanel ? "bg-blue-100 text-blue-600" : "hover:bg-slate-100 text-slate-400"}`}
+                  className={`p-2 rounded ${showJobsPanel ? "bg-blue-900/40 text-blue-400" : "hover:bg-subtle text-muted-foreground"}`}
                   title="Jobs"
                 >
                   <Briefcase size={18} />
                 </button>
-                <button className="p-2 hover:bg-slate-100 rounded text-slate-400">
+                <button className="p-2 hover:bg-subtle rounded text-muted-foreground">
                   <Users size={18} />
                 </button>
               </div>
@@ -261,7 +264,7 @@ export default function ChatPage() {
               {messages.map((msg) => (
                 <div key={msg.id} className="group">
                   {msg.type === "system" || msg.type === "join" ? (
-                    <div className="text-center text-xs text-slate-400 py-2">
+                    <div className="text-center text-xs text-muted-foreground py-2">
                       {msg.text}
                     </div>
                   ) : (
@@ -276,11 +279,11 @@ export default function ChatPage() {
                       <div className="flex-1">
                         <div className="flex items-baseline gap-2">
                           <span className="font-medium text-sm">{msg.sender}</span>
-                          <span className="text-xs text-slate-400">
+                          <span className="text-xs text-muted-foreground">
                             {formatRelativeTime(msg.created_at)}
                           </span>
                         </div>
-                        <div className="text-sm text-slate-700 mt-0.5">{msg.text}</div>
+                        <div className="text-sm text-primary mt-0.5">{msg.text}</div>
                       </div>
                     </div>
                   )}
@@ -302,7 +305,7 @@ export default function ChatPage() {
                 <button
                   type="submit"
                   disabled={!messageInput.trim()}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Send size={18} />
                 </button>
@@ -310,7 +313,7 @@ export default function ChatPage() {
             </form>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-slate-400">
+          <div className="flex-1 flex items-center justify-center text-muted-foreground">
             <div className="text-center">
               <MessageSquare size={48} className="mx-auto mb-4 opacity-50" />
               <p>Select a channel to start chatting</p>
@@ -321,40 +324,43 @@ export default function ChatPage() {
 
       {/* Jobs Panel */}
       {showJobsPanel && (
-        <div className="w-80 bg-white border-l flex flex-col">
+        <div className="w-80 bg-elevated border-l flex flex-col">
           <div className="p-4 border-b">
-            <h2 className="font-semibold flex items-center gap-2">
+            <h2 className="font-medium flex items-center gap-2">
               <Briefcase size={18} />
               Open Jobs
             </h2>
           </div>
           <div className="flex-1 overflow-y-auto p-3 space-y-3">
             {jobsData?.jobs?.length === 0 && (
-              <div className="text-sm text-slate-400 text-center py-8">No open jobs</div>
+              <div className="text-sm text-muted-foreground text-center py-8">
+                <p className="font-medium text-primary mb-1">No open jobs</p>
+                <p className="text-xs">Jobs appear here when created from chat.</p>
+              </div>
             )}
             {jobsData?.jobs?.map((job: any) => (
-              <div key={job.id} className="border rounded-lg p-3 hover:bg-slate-50">
+              <div key={job.id} className="border rounded-lg p-3 hover:bg-subtle">
                 <div className="flex items-start justify-between gap-2">
                   <h4 className="font-medium text-sm">{job.title}</h4>
-                  <span className="text-[10px] px-1.5 py-0.5 bg-slate-100 rounded text-slate-500 uppercase">
+                  <span className="text-[10px] px-1.5 py-0.5 bg-subtle rounded text-muted-foreground uppercase">
                     {job.category}
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 mt-1 line-clamp-3">{job.body}</p>
+                <p className="text-xs text-muted-foreground mt-1 line-clamp-3">{job.body}</p>
                 <div className="flex items-center justify-between mt-2">
-                  <span className="text-[10px] text-slate-400">#{job.channel}</span>
+                  <span className="text-[10px] text-muted-foreground">#{job.channel}</span>
                   <button
                     onClick={async () => {
                       try {
                         await api.claimChatJob(job.id);
                         queryClient.invalidateQueries({ queryKey: ["chat", "jobs"] });
                         queryClient.invalidateQueries({ queryKey: ["chat", "channels"] });
-                        alert(`Claimed job: ${job.title}`);
+                        console.error(`Claimed job: ${job.title}`);
                       } catch (err: unknown) {
-                        alert(`Failed to claim: ${err instanceof Error ? err.message : String(err)}`);
+                        console.error(`Failed to claim: ${err instanceof Error ? err.message : String(err)}`);
                       }
                     }}
-                    className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                    className="text-xs px-2 py-1 bg-accent text-white rounded hover:bg-accent-hover"
                   >
                     Claim
                   </button>
@@ -362,7 +368,7 @@ export default function ChatPage() {
               </div>
             ))}
             {!jobsData && (
-              <div className="text-sm text-slate-400 text-center py-8">Loading jobs...</div>
+              <div className="text-sm text-muted-foreground text-center py-8">Loading jobs...</div>
             )}
           </div>
         </div>

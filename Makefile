@@ -1,4 +1,4 @@
-.PHONY: help up down logs shell agent test lint format clean
+.PHONY: help up down logs shell agent demo test lint format clean
 
 # Default target
 help:
@@ -9,6 +9,7 @@ help:
 	@echo "  make shell    - Open a shell in the API container"
 	@echo "  make agent    - Run the example agent (requires API to be running)"
 	@echo "  make test     - Run tests (if any)"
+	@echo "  make demo     - Seed demo data into the database"
 	@echo "  make clean    - Stop services and remove volumes"
 
 # Start all services
@@ -26,6 +27,10 @@ logs:
 # Open shell in API container
 shell:
 	docker compose exec api /bin/sh
+
+# Seed demo data (requires API container to be running)
+demo:
+	docker compose exec api python scripts/seed_demo.py
 
 # Run the example agent (outside docker)
 agent:

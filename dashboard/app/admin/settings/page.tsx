@@ -27,7 +27,7 @@ function CredentialForm({ agentType, agentName, hasCredential, onSaved }: Creden
       setApiKey("");
       onSaved();
     } catch (err: unknown) {
-      alert(`Failed to save: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(`Failed to save: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setIsSaving(false);
     }
@@ -41,19 +41,19 @@ function CredentialForm({ agentType, agentName, hasCredential, onSaved }: Creden
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       onSaved();
     } catch (err: unknown) {
-      alert(`Failed to remove: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(`Failed to remove: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setIsDeleting(false);
     }
   };
 
   return (
-    <div className="border rounded-lg p-4">
+    <div className="border border-border rounded-lg p-4 bg-elevated">
       <div className="flex items-center gap-2 mb-3">
-        <Key size={18} className="text-slate-400" />
+        <Key size={18} className="text-muted-foreground" />
         <h3 className="font-medium">{agentName}</h3>
         {hasCredential && (
-          <span className="ml-auto text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded">
+          <span className="ml-auto text-xs bg-success-dim text-success border border-success/20 px-2 py-0.5 rounded">
             Configured
           </span>
         )}
@@ -66,12 +66,12 @@ function CredentialForm({ agentType, agentName, hasCredential, onSaved }: Creden
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
             placeholder={hasCredential ? "Enter new API key to update" : "Enter API key"}
-            className="w-full px-3 py-2 border rounded-md pr-10"
+            className="w-full px-3 py-2 bg-input border border-border rounded-md pr-10 text-primary placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent/50"
           />
           <button
             type="button"
             onClick={() => setShowKey(!showKey)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground"
           >
             {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>
@@ -81,7 +81,7 @@ function CredentialForm({ agentType, agentName, hasCredential, onSaved }: Creden
           <button
             type="submit"
             disabled={!apiKey.trim() || isSaving}
-            className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
+            className="flex-1 px-3 py-2 bg-accent text-white rounded-md hover:bg-accent-hover disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isSaving && <Loader2 size={14} className="animate-spin" />}
             <Save size={14} />
@@ -92,7 +92,7 @@ function CredentialForm({ agentType, agentName, hasCredential, onSaved }: Creden
               type="button"
               onClick={handleDelete}
               disabled={isDeleting}
-              className="px-3 py-2 border border-red-200 text-red-600 rounded-md hover:bg-red-50 disabled:opacity-50 flex items-center gap-2"
+              className="px-3 py-2 border border-destructive/20 text-destructive rounded-md hover:bg-destructive-dim disabled:opacity-50 flex items-center gap-2"
             >
               <Trash2 size={14} />
               Remove
@@ -121,24 +121,29 @@ export default function SettingsPage() {
   ];
 
   if (isLoading) {
-    return <div className="p-6">Loading...</div>;
+    return (
+      <div className="p-8 flex items-center justify-center text-muted-foreground gap-2">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        Loading...
+      </div>
+    );
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-2">Settings</h1>
-      <p className="text-slate-500 mb-6">
+    <div className="max-w-4xl mx-auto">
+      <h1 className="text-2xl font-medium mb-2">Settings</h1>
+      <p className="text-muted-foreground mb-6">
         Configure agent credentials and system settings
       </p>
 
       <div className="space-y-6">
         {/* Agent Credentials */}
         <section>
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <h2 className="text-lg font-medium mb-4 flex items-center gap-2">
             <Key size={20} />
             Agent API Keys
           </h2>
-          <p className="text-sm text-slate-500 mb-4">
+          <p className="text-sm text-muted-foreground mb-4">
             Store API keys for spawning agents. Keys are encrypted at rest.
           </p>
 

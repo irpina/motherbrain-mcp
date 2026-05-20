@@ -19,11 +19,11 @@ import {
 
 const navItems = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
+  { href: "/mcp", label: "MCP Services", icon: Server },
+  { href: "/activity", label: "Activity", icon: Activity },
   { href: "/agents", label: "Agents", icon: Users },
   { href: "/jobs", label: "Jobs", icon: Briefcase },
-  { href: "/mcp", label: "MCP Services", icon: Server },
   { href: "/context", label: "Context", icon: Database },
-  { href: "/activity", label: "Activity", icon: Activity },
   { href: "/chat", label: "Chat", icon: MessageSquare },
   { href: "/rules", label: "Rules", icon: ScrollText },
 ];
@@ -38,18 +38,18 @@ export function Nav() {
   const pathname = usePathname();
 
   return (
-    <nav className="w-64 bg-slate-900 text-slate-100 min-h-screen p-4">
-      <div className="mb-8">
-        <h1 className="text-xl font-bold flex items-center gap-2">
-          <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+    <nav className="w-64 bg-[#0c0c14] text-[var(--text-primary)] min-h-screen p-4 flex flex-col border-r border-[var(--border-subtle)]">
+      <div className="mb-8 px-2">
+        <h1 className="text-xl font-medium flex items-center gap-2.5 tracking-tight">
+          <span className="w-2.5 h-2.5 bg-accent rounded-full animate-pulse shadow-[0_0_8px_var(--accent)]" />
           Motherbrain
         </h1>
-        <p className="text-xs text-slate-400 mt-1">MCP Dashboard</p>
+        <p className="text-xs text-muted-foreground mt-1.5 px-5">MCP Dashboard</p>
       </div>
-      <ul className="space-y-1">
+      <ul className="space-y-0.5">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = pathname === item.href;
+          const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
           return (
             <li key={item.href}>
               <Link
@@ -57,11 +57,11 @@ export function Nav() {
                 className={cn(
                   "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
                   isActive
-                    ? "bg-slate-800 text-white"
-                    : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    ? "bg-subtle text-primary border-l-[3px] border-l-accent"
+                    : "text-muted-foreground hover:text-primary hover:bg-subtle/60"
                 )}
               >
-                <Icon size={18} />
+                <Icon size={18} strokeWidth={1.5} />
                 {item.label}
               </Link>
             </li>
@@ -69,10 +69,10 @@ export function Nav() {
         })}
       </ul>
       <div className="mt-8">
-        <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-3 mb-2">
+        <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-3 mb-2">
           Admin
         </h2>
-        <ul className="space-y-1">
+        <ul className="space-y-0.5">
           {adminItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
@@ -83,11 +83,11 @@ export function Nav() {
                   className={cn(
                     "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
                     isActive
-                      ? "bg-slate-800 text-white"
-                      : "text-slate-400 hover:text-white hover:bg-slate-800"
+                      ? "bg-subtle text-primary border-l-[3px] border-l-accent"
+                      : "text-muted-foreground hover:text-primary hover:bg-subtle/60"
                   )}
                 >
-                  <Icon size={18} />
+                  <Icon size={18} strokeWidth={1.5} />
                   {item.label}
                 </Link>
               </li>

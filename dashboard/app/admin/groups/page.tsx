@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
 
 interface Group {
   group_id: string;
@@ -52,7 +53,7 @@ export default function GroupsAdminPage() {
       setShowNewGroupForm(false);
       queryClient.invalidateQueries({ queryKey: ["admin", "groups"] });
     } catch (err: unknown) {
-      alert(`Failed to create group: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(`Failed to create group: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -63,7 +64,7 @@ export default function GroupsAdminPage() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       queryClient.invalidateQueries({ queryKey: ["admin", "groups"] });
     } catch (err: unknown) {
-      alert(`Failed to delete group: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(`Failed to delete group: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -81,7 +82,7 @@ export default function GroupsAdminPage() {
       setEditingGroup(null);
       queryClient.invalidateQueries({ queryKey: ["admin", "groups"] });
     } catch (err: unknown) {
-      alert(`Failed to update permissions: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(`Failed to update permissions: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -94,12 +95,12 @@ export default function GroupsAdminPage() {
   };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Groups</h1>
+        <h1 className="text-2xl font-medium">Groups</h1>
         <button
           onClick={() => setShowNewGroupForm(true)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          className="px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-hover transition-colors"
         >
           New Group
         </button>
@@ -107,8 +108,8 @@ export default function GroupsAdminPage() {
 
       {showNewGroupForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-96">
-            <h2 className="text-lg font-semibold mb-4">Create New Group</h2>
+          <div className="bg-elevated p-6 rounded-lg border border-border w-96">
+            <h2 className="text-lg font-medium mb-4">Create New Group</h2>
             <form onSubmit={handleCreateGroup} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-1">Name</label>
@@ -116,7 +117,7 @@ export default function GroupsAdminPage() {
                   type="text"
                   value={newGroupName}
                   onChange={(e) => setNewGroupName(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-md"
+                  className="w-full px-3 py-2 bg-input border border-border rounded-md text-primary placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent/50"
                   required
                 />
               </div>
@@ -126,20 +127,20 @@ export default function GroupsAdminPage() {
                   type="text"
                   value={newGroupDescription}
                   onChange={(e) => setNewGroupDescription(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-md"
+                  className="w-full px-3 py-2 bg-input border border-border rounded-md text-primary placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent/50"
                 />
               </div>
               <div className="flex gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowNewGroupForm(false)}
-                  className="flex-1 px-4 py-2 border rounded-md hover:bg-gray-50"
+                  className="flex-1 px-4 py-2 border border-border rounded-md text-muted-foreground hover:bg-subtle hover:text-primary transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  className="flex-1 px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-hover"
                 >
                   Create
                 </button>
@@ -151,18 +152,18 @@ export default function GroupsAdminPage() {
 
       {editingGroup && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-[32rem] max-h-[80vh] overflow-y-auto">
-            <h2 className="text-lg font-semibold mb-2">
+          <div className="bg-elevated p-6 rounded-lg border border-border w-[32rem] max-h-[80vh] overflow-y-auto">
+            <h2 className="text-lg font-medium mb-2">
               Edit Permissions: {editingGroup.name}
             </h2>
-            <p className="text-sm text-slate-500 mb-4">
+            <p className="text-sm text-muted-foreground mb-4">
               Select which MCP services members of this group can access.
             </p>
             <div className="space-y-2 mb-4">
               {services?.map((service) => (
                 <label
                   key={service.service_id}
-                  className="flex items-center gap-3 p-2 border rounded-md cursor-pointer hover:bg-slate-50"
+                  className="flex items-center gap-3 p-2 border rounded-md cursor-pointer hover:bg-subtle"
                 >
                   <input
                     type="checkbox"
@@ -172,13 +173,13 @@ export default function GroupsAdminPage() {
                   />
                   <div className="flex-1">
                     <div className="font-medium text-sm">{service.name}</div>
-                    <div className="text-xs text-slate-500">{service.service_id}</div>
+                    <div className="text-xs text-muted-foreground">{service.service_id}</div>
                   </div>
                   <span
                     className={`text-xs px-2 py-0.5 rounded ${
                       service.status === "online"
-                        ? "bg-green-100 text-green-700"
-                        : "bg-red-100 text-red-700"
+                        ? "bg-success-dim text-success border border-success/20"
+                        : "bg-destructive-dim text-destructive border border-destructive/20"
                     }`}
                   >
                     {service.status}
@@ -186,19 +187,19 @@ export default function GroupsAdminPage() {
                 </label>
               ))}
               {!services?.length && (
-                <div className="text-center text-slate-500 py-4">No MCP services registered</div>
+                <div className="text-center text-muted-foreground py-4">No MCP services registered</div>
               )}
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => setEditingGroup(null)}
-                className="flex-1 px-4 py-2 border rounded-md hover:bg-gray-50"
+                className="flex-1 px-4 py-2 border border-border rounded-md text-muted-foreground hover:bg-subtle hover:text-primary transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSavePermissions}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                className="flex-1 px-4 py-2 bg-accent text-white rounded-md hover:bg-accent-hover"
               >
                 Save Permissions
               </button>
@@ -208,11 +209,14 @@ export default function GroupsAdminPage() {
       )}
 
       {isLoading ? (
-        <div>Loading groups...</div>
+        <div className="p-8 flex items-center justify-center text-muted-foreground gap-2">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Loading groups...
+        </div>
       ) : (
-        <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
+        <div className="bg-elevated rounded-lg border border-border overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-600">
+            <thead className="bg-subtle text-muted-foreground">
               <tr>
                 <th className="px-4 py-3 text-left font-medium">Name</th>
                 <th className="px-4 py-3 text-left font-medium">Description</th>
@@ -220,24 +224,24 @@ export default function GroupsAdminPage() {
                 <th className="px-4 py-3 text-left font-medium">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y">
+            <tbody className="divide-y divide-border">
               {groups?.map((group) => (
-                <tr key={group.group_id} className="hover:bg-slate-50">
+                <tr key={group.group_id} className="hover:bg-subtle">
                   <td className="px-4 py-3 font-medium">{group.name}</td>
-                  <td className="px-4 py-3 text-slate-500">{group.description || "—"}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{group.description || "—"}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
                       {group.allowed_service_ids?.length ? (
                         group.allowed_service_ids.map((sid: string) => (
                           <span
                             key={sid}
-                            className="px-2 py-0.5 bg-slate-100 rounded text-xs"
+                            className="px-2 py-0.5 bg-subtle rounded text-xs"
                           >
                             {sid}
                           </span>
                         ))
                       ) : (
-                        <span className="text-xs text-slate-400">No services</span>
+                        <span className="text-xs text-muted-foreground">No services</span>
                       )}
                     </div>
                   </td>
@@ -245,13 +249,13 @@ export default function GroupsAdminPage() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => startEditing(group)}
-                        className="text-xs text-blue-600 hover:text-blue-700"
+                        className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
                       >
                         Edit Permissions
                       </button>
                       <button
                         onClick={() => handleDeleteGroup(group.group_id, group.name)}
-                        className="text-xs text-red-600 hover:text-red-700"
+                        className="text-xs text-destructive hover:text-red-300 transition-colors"
                       >
                         Delete
                       </button>
@@ -262,7 +266,7 @@ export default function GroupsAdminPage() {
             </tbody>
           </table>
           {groups?.length === 0 && (
-            <div className="p-8 text-center text-slate-500">No groups</div>
+            <div className="p-8 text-center text-muted-foreground">No groups</div>
           )}
         </div>
       )}
