@@ -11,6 +11,7 @@ from sqlalchemy import select, desc, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import AsyncSessionLocal
 from app.models.event_log import EventLog
+from app.redact import redact
 
 
 async def append_event(
@@ -44,8 +45,8 @@ async def append_event(
             service_id=service_id or None,
             agent_id=agent_id,
             tool_name=tool_name,
-            arguments=arguments,
-            response=response,
+            arguments=redact(arguments),
+            response=redact(response),
             status=status,
             duration_ms=duration_ms
         )
