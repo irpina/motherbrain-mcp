@@ -7,7 +7,7 @@ Audit logging. RBAC. Capability discovery. One endpoint.
 docker compose up -d && make demo
 ```
 
-<!-- Screenshot or GIF here -->
+![Motherbrain Overview](docs/screenshots/dashboard-overview.png)
 
 ---
 
@@ -35,13 +35,25 @@ One endpoint. Full visibility. Controlled access.
 ## Features
 
 ### Audit & Compliance
-Every tool call is logged with full context: caller identity, arguments, response, status, and duration. Search and filter by service, agent, tool, or topic.
+Every tool call is logged with full context: caller identity, arguments, response, status, and duration. Search and filter by service, agent, tool, or topic. Sensitive fields (tokens, passwords, API keys) are automatically redacted before storage.
+
+![Activity Log](docs/screenshots/activity.png)
 
 ### RBAC
 Users belong to groups. Groups grant access to specific MCP services. Unauthorized calls are denied and logged. Admin users bypass all checks for emergency access.
 
-### Service Health
-30-second HTTP probes on every registered service. Online/offline status in the dashboard. Last heartbeat tracked per service.
+### Service Health & Discovery
+30-second HTTP probes on every registered service. Online/offline status in the dashboard. Last heartbeat tracked per service. Click any service to see its full capability list and recent activity feed.
+
+![MCP Services](docs/screenshots/services.png)
+
+![Service Detail](docs/screenshots/service-detail.png)
+
+### Real-Time Streaming
+The dashboard activity log updates live via SSE — no polling. Connect directly: `GET /api/event-log/stream` with optional `?topic=` and `?service_id=` filters.
+
+### Observability
+Prometheus metrics at `/metrics`: total proxy calls, latency histograms, services online, agents online. Drop into any Grafana setup.
 
 ---
 
@@ -60,6 +72,7 @@ make demo        # seed realistic demo data
 - **Dashboard:** http://localhost:3000
 - **API docs:** http://localhost:8000/docs
 - **MCP endpoint:** http://localhost:8000/mcp
+- **Metrics:** http://localhost:8000/metrics
 
 The demo seeds 4 MCP services, 3 users with RBAC groups, 80+ gateway events (including a denial arc), agents, jobs, and rules. The Overview page shows gateway metrics: Services Online, Calls Today, Denials, Avg Response.
 
@@ -73,11 +86,11 @@ The demo seeds 4 MCP services, 3 users with RBAC groups, 80+ gateway events (inc
 │  etc.)  │     │  • Audit    │     │  internal-api (offline)     │
 └─────────┘     │  • RBAC     │     └─────────────────────────────┘
                 │  • Health   │
+                │  • Metrics  │
                 └─────────────┘
                        │
-                       ↓
-                ┌─────────────┐
-                │  Dashboard  │
+                ┌──────┴──────┐
+                │  Dashboard  │  ←── SSE live stream
                 │  (Next.js)  │
                 └─────────────┘
 ```
@@ -155,15 +168,17 @@ Motherbrain also includes agent orchestration, job dispatch, a shared context/sk
 | Database | PostgreSQL 15 (asyncpg) |
 | Cache / Queue | Redis 7 |
 | Migrations | Alembic (auto-applied on startup) |
+| Metrics | Prometheus + prometheus-fastapi-instrumentator |
 
 ## Development
 
 ```bash
-make up      # Start all services
-make down    # Stop
-make logs    # Follow logs
-make shell   # Shell into API container
-make demo    # Seed demo data
+make up       # Start all services
+make down     # Stop
+make logs     # Follow logs
+make shell    # Shell into API container
+make demo     # Seed demo data
+make doctor   # Diagnose DB, Redis, API, services
 ```
 
 ## Environment Variables
@@ -173,6 +188,17 @@ make demo    # Seed demo data
 | `DATABASE_URL` | PostgreSQL connection string | `postgresql+asyncpg://postgres:postgres@db:5432/motherbrain` |
 | `REDIS_URL` | Redis connection string | `redis://redis:6379` |
 | `API_KEY` | Master API key — **change before any deployment** | *(required)* |
+| `CORS_ORIGINS` | Comma-separated allowed origins for the dashboard | `http://localhost:3000` |
+| `REDACT_FIELDS` | Extra comma-separated field names to redact from logs | *(optional)* |
+
+## What's New in v3.0
+
+- **Prometheus metrics** — `/metrics` endpoint with proxy call counters, latency histograms, and online gauges for services and agents
+- **PII/secret redaction** — tokens, passwords, API keys, and credentials are automatically stripped from audit log entries before they hit the database
+- **Real-time SSE streaming** — activity log updates live in the dashboard; `GET /api/event-log/stream` for direct integration
+- **Service detail pages** — click any service to see its endpoint, protocol, full capability list, and a live activity feed
+- **`make doctor`** — diagnostic command that checks DB, Redis, API health, registered service reachability, and dashboard availability
+- **Architecture docs** — `docs/architecture.md` with component diagram and data flow; `docs/production-checklist.md` for deployment hardening
 
 ## License
 
