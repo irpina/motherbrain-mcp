@@ -126,7 +126,8 @@ async def _call_mcp_native(service: MCPService, job: Job, timeout: float) -> dic
         # accepts requests originating from Docker (host.docker.internal).
         "Host": f"localhost{port_str}",
     }
-    mcp_url = f"{service.endpoint}/mcp"
+    mcp_path = (service.mcp_path or "/mcp").rstrip("/") or "/"
+    mcp_url = f"{service.endpoint.rstrip('/')}{mcp_path}"
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:

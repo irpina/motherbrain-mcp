@@ -41,7 +41,8 @@ async def register_service(
         status="online",  # Service is alive at registration time
         last_heartbeat=datetime.now(timezone.utc),
         api_key_hash=api_key_hash,
-        protocol=data.protocol
+        protocol=data.protocol,
+        mcp_path=data.mcp_path,
     )
     
     db.add(service)
@@ -155,6 +156,8 @@ async def update_service(
         service.capabilities = data.capabilities
     if data.protocol is not None:
         service.protocol = data.protocol
+    if data.mcp_path is not None:
+        service.mcp_path = data.mcp_path
     
     await db.commit()
     await db.refresh(service)

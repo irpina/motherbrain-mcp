@@ -10,6 +10,7 @@ class MCPServiceCreate(BaseModel):
     capabilities: list[str] = []
     api_key: Optional[str] = None  # Optional API key for service auth
     protocol: str = "rest"  # "rest" = POST /execute | "mcp" = MCP JSON-RPC
+    mcp_path: Optional[str] = None  # Override MCP endpoint path (default: /mcp)
 
 
 class MCPServiceHeartbeat(BaseModel):
@@ -24,6 +25,7 @@ class MCPServiceResponse(BaseModel):
     status: str
     last_heartbeat: Optional[datetime]
     protocol: str
+    mcp_path: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -32,3 +34,4 @@ class MCPServiceUpdate(BaseModel):
     endpoint: Optional[str] = None
     capabilities: Optional[list[str]] = None
     protocol: Optional[str] = None
+    mcp_path: Optional[str] = None

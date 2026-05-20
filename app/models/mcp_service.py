@@ -20,3 +20,4 @@ class MCPService(Base):
     )
     api_key_hash: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     protocol: Mapped[str] = mapped_column(String, default="rest")  # "rest" | "mcp"
+    mcp_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)  # MCP endpoint path, defaults to /mcp

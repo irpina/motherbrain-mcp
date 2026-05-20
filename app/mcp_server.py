@@ -71,7 +71,7 @@ def _infer_topic(service_id: str, tool_name: str) -> str:
     return "proxy"
 
 
-async def _discover_capabilities(endpoint: str) -> list[str]:
+async def _discover_capabilities(endpoint: str, mcp_path_override: str = "/mcp") -> list[str]:
     """Call tools/list on an MCP endpoint and return tool names.
     
     Uses the same MCP session handshake as mcp_proxy._call_mcp_native.
@@ -81,7 +81,8 @@ async def _discover_capabilities(endpoint: str) -> list[str]:
     from uuid import uuid4
     import httpx
 
-    mcp_url = endpoint.rstrip("/") + "/mcp"
+    mcp_path = (mcp_path_override or "/mcp").rstrip("/") or "/"
+    mcp_url = endpoint.rstrip("/") + mcp_path
     parsed = urlparse(endpoint)
     port_str = f":{parsed.port}" if parsed.port else ""
     headers = {
@@ -484,15 +485,16 @@ async def register_service(
             action = "registered"
         
         # Immediately probe the endpoint
-        is_online = await _probe(endpoint)
+        _mcp_path = getattr(service, 'mcp_path', None) or "/mcp"
+        is_online = await _probe(endpoint, _mcp_path)
         if not is_online:
             await mcp_service_service.update_service_status(db, service_id, "offline")
             service.status = "offline"
-        
+
         # Auto-discover capabilities if none provided
         capabilities_discovered = False
         if not capabilities and is_online:
-            discovered = await _discover_capabilities(endpoint)
+            discovered = await _discover_capabilities(endpoint, _mcp_path)
             if discovered:
                 capabilities = discovered
                 capabilities_discovered = True
