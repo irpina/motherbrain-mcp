@@ -4,6 +4,8 @@ Called as a FastAPI BackgroundTask after job creation.
 Creates its own DB session so it outlives the request lifecycle.
 """
 
+import time
+
 from app.db.session import AsyncSessionLocal
 from app.services import router as job_router
 from app.services import mcp_proxy
@@ -12,6 +14,7 @@ from app.services.agent_registry import enqueue_trigger
 from app.services.event_log import append_event
 from app.exceptions import NoMCPServiceAvailable, MCPServiceTimeout, MCPServiceError
 from app.queue import redis_queue
+from app.metrics import proxy_calls_total, proxy_latency_seconds
 
 
 async def dispatch(job_id: str) -> None:
@@ -46,6 +49,9 @@ async def _dispatch_mcp(db, job) -> None:
     await db.commit()
     await db.refresh(job)
 
+    svc_id = job.target_service_id or "unknown"
+    tool = job.type
+    t0 = time.monotonic()
     try:
         route = await job_router.route_job(job, db)
         service = route["target"]
@@ -53,13 +59,20 @@ async def _dispatch_mcp(db, job) -> None:
         job.status = "completed"
         job.result = result
         job.error = None
+        proxy_calls_total.labels(service_id=svc_id, tool_name=tool, status="ok").inc()
 
     except (NoMCPServiceAvailable, MCPServiceTimeout, MCPServiceError) as e:
         job.status = "failed"
         job.error = str(e)
+        proxy_calls_total.labels(service_id=svc_id, tool_name=tool, status="error").inc()
     except Exception as e:
         job.status = "failed"
         job.error = f"Unexpected error: {str(e)}"
+        proxy_calls_total.labels(service_id=svc_id, tool_name=tool, status="error").inc()
+    finally:
+        proxy_latency_seconds.labels(service_id=svc_id, tool_name=tool).observe(
+            time.monotonic() - t0
+        )
 
     await db.commit()
     await db.refresh(job)

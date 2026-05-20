@@ -11,9 +11,11 @@ this probes outbound — so external services like supergateway are covered.
 """
 import asyncio
 import logging
+from datetime import datetime, timezone, timedelta
 import httpx
 from app.db.session import AsyncSessionLocal
 from app.services.mcp_service_service import list_services, update_service_status, update_heartbeat
+from app.metrics import services_online, agents_online
 
 logger = logging.getLogger(__name__)
 CHECK_INTERVAL_SECONDS = 30
@@ -58,5 +60,15 @@ async def start_health_checker() -> None:
                         await update_service_status(db, svc.service_id, "offline")
                 if svc.status != new_status:
                     logger.info("Service %s → %s", svc.service_id, new_status)
+            services_online.set(sum(1 for s in services if s.status == "online"))
+            # Update agents_online gauge based on recent heartbeats
+            from app.services.agent_service import list_agents
+            async with AsyncSessionLocal() as db:
+                all_agents = await list_agents(db)
+            cutoff = datetime.now(timezone.utc) - timedelta(seconds=300)
+            agents_online.set(sum(
+                1 for a in all_agents
+                if a.last_heartbeat and a.last_heartbeat > cutoff
+            ))
         except Exception:
             logger.exception("Health checker error")

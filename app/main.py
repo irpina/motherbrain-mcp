@@ -3,6 +3,7 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 from app.middleware.mcp_auth import MCPAuthMiddleware
 from app.db.init_db import init_db
 from app.api.routes import agents, jobs, context, messages, actions, mcp, system, events, heartbeat, event_log_routes, admin, chat, agent_spawn, agent_terminal, rules
@@ -83,6 +84,9 @@ app.include_router(rules.router)
 
 # Mount MCP server at /mcp (shares FastAPI event loop)
 app.mount("/mcp", get_mcp_app())
+
+# Prometheus metrics at /metrics (exclude from own instrumentation)
+Instrumentator(excluded_handlers=["/metrics"]).instrument(app).expose(app)
 
 
 @app.get("/health")

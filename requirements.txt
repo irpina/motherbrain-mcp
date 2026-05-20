@@ -1,5 +1,6 @@
 fastapi
 uvicorn[standard]
+prometheus-fastapi-instrumentator
 sqlalchemy[asyncio]
 asyncpg
 pydantic-settings
